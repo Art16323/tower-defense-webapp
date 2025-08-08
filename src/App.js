@@ -13,17 +13,19 @@ function App() {
   const canvasRef = useRef(null);
 
   useEffect(() => {
+  console.log("✅ useEffect сработал");
+  console.log("🧩 window.Telegram:", window.Telegram);
     const tg = window.Telegram.WebApp;
     tg.ready();        // уведомляем Telegram, что всё загружено
     tg.expand();       // разворачиваем на весь экран
 
     const app = new PIXI.Application({
-      resizeTo: canvasRef.current,
-      backgroundColor: 0xeeeeee,
-      antialias: true,
-    });
+  resizeTo: canvasRef.current,
+  backgroundColor: 0xeeeeee,
+  antialias: true,
+});
 
-    canvasRef.current.appendChild(app.view);
+    canvasRef.current.appendChild(app.canvas);
 
     // Сетка
     for (let y = 0; y < GRID_SIZE; y++) {
