@@ -13,52 +13,57 @@ function App() {
   const canvasRef = useRef(null);
 
   useEffect(() => {
-  console.log("✅ useEffect сработал");
-  console.log("🧩 window.Telegram:", window.Telegram);
-    const tg = window.Telegram.WebApp;
-    tg.ready();        // уведомляем Telegram, что всё загружено
-    tg.expand();       // разворачиваем на весь экран
+    console.log("✅ useEffect сработал");
+    console.log("🧩 window.Telegram:", window.Telegram);
 
-    const app = new PIXI.Application({
-  resizeTo: canvasRef.current,
-  backgroundColor: 0xeeeeee,
-  antialias: true,
-});
+    const tg = window.Telegram?.WebApp;
+    tg?.ready();
+    tg?.expand();
 
-    canvasRef.current.appendChild(app.canvas);
-
-    // Сетка
-    for (let y = 0; y < GRID_SIZE; y++) {
-      for (let x = 0; x < GRID_SIZE; x++) {
-        const tile = new PIXI.Graphics();
-        tile.lineStyle(1, 0x999999);
-        tile.beginFill(0xffffff);
-        tile.drawRect(0, 0, TILE_SIZE, TILE_SIZE);
-        tile.endFill();
-        tile.x = x * TILE_SIZE;
-        tile.y = y * TILE_SIZE;
-        app.stage.addChild(tile);
+    PIXI.Application.init({
+      resizeTo: window,
+      backgroundColor: 0xeeeeee,
+      antialias: true,
+    }).then(app => {
+      if (canvasRef.current) {
+        canvasRef.current.appendChild(app.canvas);
       }
-    }
 
-    // Враг
-    const enemy = new PIXI.Graphics();
-    enemy.beginFill(0xff0000);
-    enemy.drawCircle(0, 0, TILE_SIZE / 4);
-    enemy.endFill();
-    app.stage.addChild(enemy);
-
-    let index = 0;
-    app.ticker.add(() => {
-      if (index < enemyPath.length) {
-        const [x, y] = enemyPath[Math.floor(index)];
-        enemy.x = x * TILE_SIZE + TILE_SIZE / 2;
-        enemy.y = y * TILE_SIZE + TILE_SIZE / 2;
-        index += 0.05;
+      // Сетка
+      for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+          const tile = new PIXI.Graphics();
+          tile.lineStyle(1, 0x999999);
+          tile.beginFill(0xffffff);
+          tile.drawRect(0, 0, TILE_SIZE, TILE_SIZE);
+          tile.endFill();
+          tile.x = x * TILE_SIZE;
+          tile.y = y * TILE_SIZE;
+          app.stage.addChild(tile);
+        }
       }
+
+      // Враг
+      const enemy = new PIXI.Graphics();
+      enemy.beginFill(0xff0000);
+      enemy.drawCircle(0, 0, TILE_SIZE / 4);
+      enemy.endFill();
+      app.stage.addChild(enemy);
+
+      let index = 0;
+      app.ticker.add(() => {
+        if (index < enemyPath.length) {
+          const [x, y] = enemyPath[Math.floor(index)];
+          enemy.x = x * TILE_SIZE + TILE_SIZE / 2;
+          enemy.y = y * TILE_SIZE + TILE_SIZE / 2;
+          index += 0.05;
+        }
+      });
     });
 
-    return () => app.destroy(true, true);
+    return () => {
+      // ничего не удаляем — PixiJS v8 init async
+    };
   }, []);
 
   return (
