@@ -21,6 +21,8 @@ function App() {
 
     canvasRef.current.appendChild(app.view);
 
+    // добавляем башни в следующем шаге
+
     // Отрисовка сетки
     for (let y = 0; y < GRID_SIZE; y++) {
       for (let x = 0; x < GRID_SIZE; x++) {
@@ -57,3 +59,10 @@ function App() {
   }, []);
 
   return (
+    <div style={{ display: 'flex', justifyContent: 'center', padding: 20 }}>
+      <div ref={canvasRef}></div>
+    </div>
+  );
+}
+
+export default App;
