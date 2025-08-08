@@ -13,15 +13,19 @@ function App() {
   const canvasRef = useRef(null);
 
   useEffect(() => {
+    const tg = window.Telegram.WebApp;
+    tg.ready();        // уведомляем Telegram, что всё загружено
+    tg.expand();       // разворачиваем на весь экран
+
     const app = new PIXI.Application({
-      width: TILE_SIZE * GRID_SIZE,
-      height: TILE_SIZE * GRID_SIZE,
+      resizeTo: canvasRef.current,
       backgroundColor: 0xeeeeee,
+      antialias: true,
     });
 
     canvasRef.current.appendChild(app.view);
 
-    // Отрисовка сетки
+    // Сетка
     for (let y = 0; y < GRID_SIZE; y++) {
       for (let x = 0; x < GRID_SIZE; x++) {
         const tile = new PIXI.Graphics();
@@ -35,14 +39,13 @@ function App() {
       }
     }
 
-    // Враг — красный круг
+    // Враг
     const enemy = new PIXI.Graphics();
     enemy.beginFill(0xff0000);
     enemy.drawCircle(0, 0, TILE_SIZE / 4);
     enemy.endFill();
     app.stage.addChild(enemy);
 
-    // Анимация
     let index = 0;
     app.ticker.add(() => {
       if (index < enemyPath.length) {
@@ -57,9 +60,14 @@ function App() {
   }, []);
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', padding: 20 }}>
-      <div ref={canvasRef}></div>
-    </div>
+    <div
+      ref={canvasRef}
+      style={{
+        width: '100%',
+        height: '100vh',
+        overflow: 'hidden',
+      }}
+    ></div>
   );
 }
 
