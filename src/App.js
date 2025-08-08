@@ -21,8 +21,6 @@ function App() {
 
     canvasRef.current.appendChild(app.view);
 
-    // добавляем башни в следующем шаге
-
     // Отрисовка сетки
     for (let y = 0; y < GRID_SIZE; y++) {
       for (let x = 0; x < GRID_SIZE; x++) {
@@ -44,14 +42,14 @@ function App() {
     enemy.endFill();
     app.stage.addChild(enemy);
 
-    // Анимация движения врага
+    // Анимация
     let index = 0;
     app.ticker.add(() => {
       if (index < enemyPath.length) {
-        const [x, y] = enemyPath[index];
+        const [x, y] = enemyPath[Math.floor(index)];
         enemy.x = x * TILE_SIZE + TILE_SIZE / 2;
         enemy.y = y * TILE_SIZE + TILE_SIZE / 2;
-        index += 0.05; // скорость
+        index += 0.05;
       }
     });
 
