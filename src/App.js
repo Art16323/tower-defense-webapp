@@ -4,9 +4,17 @@ import * as PIXI from 'pixi.js';
 const TILE_SIZE = 64;
 const GRID_SIZE = 5;
 
+// Маршрут врага
 const enemyPath = [
   [0, 0], [1, 0], [2, 0], [3, 0], [4, 0],
   [4, 1], [4, 2], [3, 2], [2, 2], [1, 2], [0, 2]
+];
+
+// Позиции башен
+const towerPositions = [
+  [2, 1], // башня в центре верхней линии
+  [3, 3], // башня справа внизу
+  [1, 4]  // башня слева внизу
 ];
 
 function App() {
@@ -24,7 +32,6 @@ function App() {
       antialias: true,
     });
 
-    // важно: в v7 используем view
     if (canvasRef.current) {
       canvasRef.current.appendChild(app.view);
     }
@@ -43,6 +50,17 @@ function App() {
       }
     }
 
+    // Добавляем башни
+    towerPositions.forEach(([x, y]) => {
+      const tower = new PIXI.Graphics();
+      tower.beginFill(0x0000ff); // синий цвет
+      tower.drawCircle(0, 0, TILE_SIZE / 3);
+      tower.endFill();
+      tower.x = x * TILE_SIZE + TILE_SIZE / 2;
+      tower.y = y * TILE_SIZE + TILE_SIZE / 2;
+      app.stage.addChild(tower);
+    });
+
     // Враг
     const enemy = new PIXI.Graphics();
     enemy.beginFill(0xff0000);
@@ -56,7 +74,7 @@ function App() {
         const [x, y] = enemyPath[Math.floor(index)];
         enemy.x = x * TILE_SIZE + TILE_SIZE / 2;
         enemy.y = y * TILE_SIZE + TILE_SIZE / 2;
-        index += 0.05;
+        index += 0.02;
       }
     });
 
