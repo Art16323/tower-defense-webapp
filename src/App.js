@@ -4,7 +4,7 @@ import * as PIXI from 'pixi.js';
 const TILE_SIZE = 64;
 const GRID_SIZE = 5;
 
-// Маршрут врага
+// Путь врага
 const enemyPath = [
   [0, 0], [1, 0], [2, 0], [3, 0], [4, 0],
   [4, 1], [4, 2], [3, 2], [2, 2], [1, 2], [0, 2]
@@ -12,10 +12,13 @@ const enemyPath = [
 
 // Позиции башен
 const towerPositions = [
-  [2, 1], // башня в центре верхней линии
-  [3, 3], // башня справа внизу
-  [1, 4]  // башня слева внизу
+  [2, 1],
+  [3, 3],
+  [1, 4]
 ];
+
+const TOWER_RANGE = TILE_SIZE * 2; // радиус атаки
+const BULLET_SPEED = 3; // скорость полёта снаряда
 
 function App() {
   const canvasRef = useRef(null);
@@ -50,15 +53,17 @@ function App() {
       }
     }
 
-    // Добавляем башни
+    // Башни
+    const towers = [];
     towerPositions.forEach(([x, y]) => {
       const tower = new PIXI.Graphics();
-      tower.beginFill(0x0000ff); // синий цвет
+      tower.beginFill(0x0000ff);
       tower.drawCircle(0, 0, TILE_SIZE / 3);
       tower.endFill();
       tower.x = x * TILE_SIZE + TILE_SIZE / 2;
       tower.y = y * TILE_SIZE + TILE_SIZE / 2;
       app.stage.addChild(tower);
+      towers.push({ x: tower.x, y: tower.y, cooldown: 0 });
     });
 
     // Враг
@@ -69,13 +74,54 @@ function App() {
     app.stage.addChild(enemy);
 
     let index = 0;
+    const bullets = [];
+
     app.ticker.add(() => {
+      // Движение врага
       if (index < enemyPath.length) {
         const [x, y] = enemyPath[Math.floor(index)];
         enemy.x = x * TILE_SIZE + TILE_SIZE / 2;
         enemy.y = y * TILE_SIZE + TILE_SIZE / 2;
         index += 0.02;
       }
+
+      // Стрельба башен
+      towers.forEach(tower => {
+        const dx = enemy.x - tower.x;
+        const dy = enemy.y - tower.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance <= TOWER_RANGE && tower.cooldown <= 0) {
+          // создаём пулю
+          const bullet = new PIXI.Graphics();
+          bullet.beginFill(0xffff00);
+          bullet.drawCircle(0, 0, 5);
+          bullet.endFill();
+          bullet.x = tower.x;
+          bullet.y = tower.y;
+          bullet.vx = (dx / distance) * BULLET_SPEED;
+          bullet.vy = (dy / distance) * BULLET_SPEED;
+          bullets.push(bullet);
+          app.stage.addChild(bullet);
+          tower.cooldown = 50; // перезарядка
+        } else {
+          tower.cooldown--;
+        }
+      });
+
+      // Движение пуль
+      bullets.forEach((bullet, i) => {
+        bullet.x += bullet.vx;
+        bullet.y += bullet.vy;
+
+        // проверка попадания
+        const dx = enemy.x - bullet.x;
+        const dy = enemy.y - bullet.y;
+        if (Math.sqrt(dx * dx + dy * dy) < 10) {
+          app.stage.removeChild(bullet);
+          bullets.splice(i, 1);
+        }
+      });
     });
 
     return () => {
