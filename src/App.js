@@ -2,28 +2,30 @@ import { useEffect, useRef, useState } from "react";
 import * as PIXI from "pixi.js";
 
 const TILE_SIZE = 64;
-const GRID_SIZE = 5;
+const GRID_SIZE = 10; // было 5 — сделал 10; можно менять под девайсы
 
-// Путь (по клеткам)
-const enemyPath = [
-  [0, 0], [1, 0], [2, 0], [3, 0], [4, 0],
-  [4, 1], [4, 2], [3, 2], [2, 2], [1, 2], [0, 2]
-];
+// Длинный путь змейкой по всему полю
+function buildSnakePath(n) {
+  const p = [];
+  for (let y = 0; y < n; y++) {
+    if (y % 2 === 0) {
+      for (let x = 0; x < n; x++) p.push([x, y]);
+    } else {
+      for (let x = n - 1; x >= 0; x--) p.push([x, y]);
+    }
+  }
+  return p;
+}
+const enemyPath = buildSnakePath(GRID_SIZE);
 const pathSet = new Set(enemyPath.map(([x, y]) => `${x},${y}`));
 
-// Типы башен (секундные тайминги; bulletSpeed — px/сек)
-const TOWER_TYPES = {
-  archer: { name: "Лучник", cost: 50,  range: TILE_SIZE * 2.2, cooldownSec: 0.75, bulletSpeed: 220, color: 0x1e90ff, damage: 1,   upgradeCost: 40 },
-  cannon: { name: "Пушка",  cost: 80,  range: TILE_SIZE * 2.6, cooldownSec: 1.20, bulletSpeed: 180, color: 0xffa500, damage: 2,   upgradeCost: 60 },
-  mage:   { name: "Маг",    cost: 100, range: TILE_SIZE * 3.0, cooldownSec: 0.90, bulletSpeed: 240, color: 0x7a00ff, damage: 1.5, upgradeCost: 70 },
-};
-
-// Волны (скорость — клеток/сек; hp — хиты)
-const WAVES = [
-  { enemies: 6,  speed: 0.80, hp: 1 },
-  { enemies: 10, speed: 1.00, hp: 2 },
-  { enemies: 14, speed: 1.25, hp: 3 },
-];
+// Генерация параметров волны по её индексу (0,1,2,...)
+function getWaveConf(idx) {
+  const enemies = 6 + Math.floor(idx * 1.5);          // постепенно больше врагов
+  const speed   = 0.80 + Math.min(0.9, idx * 0.03);    // ускоряем, но с потолком
+  const hp      = 1 + Math.floor(idx / 2);             // раз в две волны +1 хп
+  return { enemies, speed, hp };
+}
 
 export default function App() {
   // DOM
@@ -40,7 +42,7 @@ export default function App() {
   // Истинное состояние (refs)
   const goldRef  = useRef(150);
   const livesRef = useRef(5);
-  const waveRef  = useRef(0);        // индекс следующей волны (0..N-1)
+  const waveRef  = useRef(0);        // индекс следующей волны (0..∞)
   const breakRef = useRef(0);        // перерыв в секундах
   const isWaveActiveRef = useRef(false);
 
@@ -50,6 +52,13 @@ export default function App() {
   const bulletsRef = useRef([]);     // {sprite,vx,vy,speed,target,damage}
   const occupiedRef = useRef(new Set()); // "x,y"
   const spawnRef = useRef({ toSpawn: 0, timerSec: 0 });
+
+  // Типы башен (секундные тайминги; bulletSpeed — px/сек)
+  const TOWER_TYPES = {
+    archer: { name: "Лучник", cost: 50,  range: TILE_SIZE * 2.2, cooldownSec: 0.75, bulletSpeed: 220, color: 0x1e90ff, damage: 1,   upgradeCost: 40 },
+    cannon: { name: "Пушка",  cost: 80,  range: TILE_SIZE * 2.6, cooldownSec: 1.20, bulletSpeed: 180, color: 0xffa500, damage: 2,   upgradeCost: 60 },
+    mage:   { name: "Маг",    cost: 100, range: TILE_SIZE * 3.0, cooldownSec: 0.90, bulletSpeed: 240, color: 0x7a00ff, damage: 1.5, upgradeCost: 70 },
+  };
 
   // UI-стейты (синкаем редко)
   const [gold, setGold]       = useState(goldRef.current);
@@ -237,19 +246,19 @@ export default function App() {
 
   function startWave() {
     if (isWaveActiveRef.current) return;
-    const idx = waveRef.current;
-    if (idx >= WAVES.length) return;
 
-    const conf = WAVES[idx];
-    spawnRef.current.toSpawn = conf.enemies;
-    spawnRef.current.timerSec = 0.5; // стартовая задержка
+    const idx = waveRef.current;       // 0..∞ — индекс следующей волны
+    const conf = getWaveConf(idx);
+
+    spawnRef.current.toSpawn  = conf.enemies;
+    spawnRef.current.timerSec = 0.5;   // стартовая задержка
     isWaveActiveRef.current = true;
-    waveRef.current += 1; // теперь 1..N
+    waveRef.current += 1;              // теперь счётчик волн в UI идёт 1..∞
   }
 
   function spawnEnemy() {
-    const idx = Math.max(0, waveRef.current - 1);
-    const conf = WAVES[idx];
+    const idx = Math.max(0, waveRef.current - 1); // индекс активной волны
+    const conf = getWaveConf(idx);
 
     const sprite = new PIXI.Graphics();
     sprite.beginFill(0xff3b30);
@@ -355,9 +364,13 @@ export default function App() {
       : (deltaOrTicker?.deltaTime ?? 1);
     const dtSec = dt / 60;
 
-    // Перерыв
+    // Перерыв: тикает и автостарт по окончании
     if (!isWaveActiveRef.current && breakRef.current > 0) {
       breakRef.current = Math.max(0, breakRef.current - dtSec);
+      if (breakRef.current <= 0) {
+        breakRef.current = 0;
+        startWave(); // автостарт следующей волны
+      }
     }
 
     // Спавн волны
@@ -371,15 +384,10 @@ export default function App() {
         }
       }
 
-      // Конец волны?
+      // Конец волны? — запускаем перерыв, без ограничений по количеству волн
       if (spawnRef.current.toSpawn === 0 && enemiesRef.current.length === 0) {
         isWaveActiveRef.current = false;
-        if (waveRef.current >= WAVES.length) {
-          showOverlay("🏆 Победа!");
-          app.ticker.stop();
-        } else {
-          breakRef.current = 10; // сек перерыва
-        }
+        breakRef.current = 8; // длина перерыва между волнами
       }
     }
 
@@ -492,7 +500,7 @@ export default function App() {
     zIndex: 10
   };
 
-  const startDisabled = isWaveActiveRef.current || waveRef.current >= WAVES.length;
+  const startDisabled = isWaveActiveRef.current; // без проверки длины массива волн
 
   return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}>
@@ -500,7 +508,7 @@ export default function App() {
       <div style={panelStyle}>
         <div>💰 {gold}</div>
         <div>❤️ {lives}</div>
-        <div>🌊 Волна: {Math.min(wave, WAVES.length)}/{WAVES.length}</div>
+        <div>🌊 Волна: {wave}</div>
         {isWaveActiveRef.current ? <div>⏳ Волна идёт</div> : <div>☕ Перерыв: {breakTime}s</div>}
       </div>
 
