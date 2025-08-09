@@ -26,9 +26,7 @@ function toRoman(num){
   return out || 'I';
 }
 
-// Генерация пути: старт сверху-слева (внутри отступа), база = последняя клетка;
-// ограничения: не более 2 вертикалей подряд, горизонтали ограничены (<=4),
-// минимальная длина ~50% всех клеток.
+// Генерация пути: старт сверху-слева, база — последняя клетка
 function buildRandomPath(seed = Date.now(), opts = {}) {
   const N = GRID_SIZE;
   const rnd = mulberry32(seed);
@@ -40,18 +38,14 @@ function buildRandomPath(seed = Date.now(), opts = {}) {
   const used = new Set();
   const push = (x, y) => {
     const k = `${x},${y}`;
-    if (!used.has(k)) {
-      used.add(k);
-      path.push([x, y]);
-      return true;
-    }
+    if (!used.has(k)) { used.add(k); path.push([x, y]); return true; }
     return false;
   };
 
   let y = MARGIN;
   let goRight = true;
   let vStreak = 0;
-  push(MARGIN, y); // гарантируем не пустой путь
+  push(MARGIN, y);
 
   while (y < N - 1 - MARGIN) {
     const xStart = goRight ? MARGIN : N - 1 - MARGIN;
@@ -64,7 +58,6 @@ function buildRandomPath(seed = Date.now(), opts = {}) {
       push(x, y);
       hStreak++;
       if (hStreak >= maxHoriz && y < N - 1 - MARGIN) {
-        // мини-спуск
         push(x, y + 1);
         y += 1;
         vStreak = Math.min(vStreak + 1, maxVert);
@@ -81,7 +74,7 @@ function buildRandomPath(seed = Date.now(), opts = {}) {
 
     if (y < N - 1 - MARGIN) {
       const drop = rnd() < 0.5 ? 1 : 2;
-      const edgeX = xEnd; // последний реальный x
+      const edgeX = xEnd;
       for (let k = 1; k <= drop && y + k <= N - 1 - MARGIN; k++) {
         push(edgeX, y + k);
         vStreak++;
@@ -98,7 +91,7 @@ function buildRandomPath(seed = Date.now(), opts = {}) {
     goRight = !goRight;
   }
 
-  // доберём до низа, если нужно
+  // доберём до низа
   let [cx, cy] = path[path.length - 1];
   const bottom = N - 1 - MARGIN;
   vStreak = 0;
@@ -112,7 +105,7 @@ function buildRandomPath(seed = Date.now(), opts = {}) {
     }
   }
 
-  // добор длины по низу змейкой, с предохранителем
+  // добор длины по низу
   let dir = (path.length % 2 === 0) ? 1 : -1;
   let hStreak2 = 0;
   let safety = 0;
@@ -131,10 +124,10 @@ function buildRandomPath(seed = Date.now(), opts = {}) {
     }
   }
 
-  return path; // последняя клетка — база
+  return path;
 }
 
-// ====== WAVES (infinite) ======
+// ====== WAVES ======
 function getWaveConf(idx) {
   const enemies = 6 + Math.floor(idx * 1.5);
   const speed = 0.8 + Math.min(0.9, idx * 0.03);
@@ -142,13 +135,12 @@ function getWaveConf(idx) {
   return { enemies, speed, hp };
 }
 
-// ====== ENEMIES ======
+// ====== ENEMIES meta ======
 const ENEMY_TYPES = {
-  grunt:  { name: 'Гоблин',  color: 0xff3b30, speedMul: 1.0, hpMul: 1.0 },   // базовый
-  runner: { name: 'Скаут',   color: 0x00c853, speedMul: 1.4, hpMul: 0.8 },   // быстрый, хрупкий
-  tank:   { name: 'Танк',    color: 0x7e57c2, speedMul: 0.7, hpMul: 3.0 },   // медленный, толстый
+  grunt:  { name: 'Гоблин',  color: 0xff3b30, speedMul: 1.0, hpMul: 1.0 },
+  runner: { name: 'Скаут',   color: 0x00c853, speedMul: 1.4, hpMul: 0.8 },
+  tank:   { name: 'Танк',    color: 0x7e57c2, speedMul: 0.7, hpMul: 3.0 },
 };
-
 function pickEnemyType(idx) {
   if (idx < 2) return 'grunt';
   const r = Math.random();
@@ -157,7 +149,7 @@ function pickEnemyType(idx) {
   return 'tank';
 }
 
-// ====== SPRITE TOWERS (drawn) ======
+// ====== SPRITE TOWERS (SVG) ======
 const TOWER_SVGS = {
   archer: `<?xml version='1.0'?><svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 128 128'>
     <defs>
@@ -198,97 +190,51 @@ const TOWER_SVGS = {
   </svg>`
 };
 
-// =================== SVG helper ===================
+// ====== SVG helper ======
 function svgToURI(svg) {
-  // Кодируем в UTF-8 и вставляем напрямую без base64
   return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
 }
 
-// ====== SPRITE ENEMIES (SVG) ======
-const ENEMY_SVGS = {
-  // Базовый пехотинец
-  grunt: `<?xml version='1.0'?>
-  <svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 128 128'>
-    <defs>
-      <linearGradient id='torso1' x1='0' x2='0' y1='0' y2='1'>
-        <stop offset='0%' stop-color='#ff9e80'/>
-        <stop offset='100%' stop-color='#ff3b30'/>
-      </linearGradient>
-      <linearGradient id='shield1' x1='0' x2='1' y1='0' y2='1'>
-        <stop offset='0%' stop-color='#8d6e63'/>
-        <stop offset='100%' stop-color='#5d4037'/>
-      </linearGradient>
-      <linearGradient id='metal1' x1='0' x2='0' y1='0' y2='1'>
-        <stop offset='0%' stop-color='#eceff1'/>
-        <stop offset='100%' stop-color='#90a4ae'/>
-      </linearGradient>
-    </defs>
-    <circle cx='64' cy='64' r='28' fill='url(#torso1)' stroke='#6b1c14' stroke-width='4'/>
-    <circle cx='64' cy='40' r='12' fill='#ffe0b2' stroke='#6b1c14' stroke-width='3'/>
-    <circle cx='60' cy='38' r='2.5' fill='#263238'/><circle cx='68' cy='38' r='2.5' fill='#263238'/>
-    <rect x='52' y='88' width='10' height='18' rx='4' fill='#5d4037'/>
-    <rect x='66' y='88' width='10' height='18' rx='4' fill='#5d4037'/>
-    <rect x='38' y='60' width='14' height='10' rx='4' fill='#ffccbc'/>
-    <rect x='76' y='60' width='14' height='10' rx='4' fill='#ffccbc'/>
-    <circle cx='40' cy='64' r='16' fill='url(#shield1)' stroke='#3e2723' stroke-width='3'/>
-    <circle cx='40' cy='64' r='5' fill='#3e2723' opacity='0.8'/>
-    <rect x='84' y='54' width='24' height='6' rx='3' fill='url(#metal1)' stroke='#263238' stroke-width='2'/>
-    <rect x='82' y='51' width='6' height='12' rx='3' fill='#6d4c41'/>
-  </svg>`,
-  // Скаут
-  runner: `<?xml version='1.0'?>
-  <svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 128 128'>
-    <defs>
-      <linearGradient id='torso2' x1='0' x2='1' y1='0' y2='1'>
-        <stop offset='0%' stop-color='#a7ffeb'/>
-        <stop offset='100%' stop-color='#00c853'/>
-      </linearGradient>
-      <linearGradient id='metal2' x1='0' x2='0' y1='0' y2='1'>
-        <stop offset='0%' stop-color='#fafafa'/>
-        <stop offset='100%' stop-color='#b0bec5'/>
-      </linearGradient>
-    </defs>
-    <ellipse cx='64' cy='64' rx='30' ry='24' fill='url(#torso2)' stroke='#0a3d24' stroke-width='4'/>
-    <circle cx='64' cy='40' r='11' fill='#ffe0b2' stroke='#0a3d24' stroke-width='3'/>
-    <circle cx='60' cy='39' r='2.2' fill='#0a3d24'/><circle cx='68' cy='39' r='2.2' fill='#0a3d24'/>
-    <rect x='50' y='86' width='10' height='18' rx='4' transform='rotate(-10 55 95)' fill='#37474f'/>
-    <rect x='68' y='86' width='10' height='18' rx='4' transform='rotate(12 73 95)' fill='#37474f'/>
-    <rect x='36' y='60' width='14' height='8' rx='4' fill='#ffccbc'/>
-    <rect x='78' y='60' width='14' height='8' rx='4' fill='#ffccbc'/>
-    <rect x='28' y='58' width='18' height='5' rx='2.5' fill='url(#metal2)' stroke='#263238' stroke-width='2'/>
-    <rect x='82' y='58' width='18' height='5' rx='2.5' fill='url(#metal2)' stroke='#263238' stroke-width='2'/>
-  </svg>`,
-  // Танк
-  tank: `<?xml version='1.0'?>
-  <svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 128 128'>
-    <defs>
-      <linearGradient id='torso3' x1='0' x2='0' y1='0' y2='1'>
-        <stop offset='0%' stop-color='#d1c4e9'/>
-        <stop offset='100%' stop-color='#7e57c2'/>
-      </linearGradient>
-      <linearGradient id='metal3' x1='0' x2='0' y1='0' y2='1'>
-        <stop offset='0%' stop-color='#eceff1'/>
-        <stop offset='100%' stop-color='#90a4ae'/>
-      </linearGradient>
-      <linearGradient id='wood3' x1='0' x2='0' y1='0' y2='1'>
-        <stop offset='0%' stop-color='#8d6e63'/>
-        <stop offset='100%' stop-color='#5d4037'/>
-      </linearGradient>
-    </defs>
-    <rect x='36' y='46' width='56' height='42' rx='12' fill='url(#torso3)' stroke='#3c2c63' stroke-width='4'/>
-    <circle cx='64' cy='38' r='12' fill='#d7ccc8' stroke='#3c2c63' stroke-width='3'/>
-    <circle cx='60' cy='36' r='2.2' fill='#3c2c63'/><circle cx='68' cy='36' r='2.2' fill='#3c2c63'/>
-    <rect x='48' y='90' width='12' height='20' rx='5' fill='#4e342e'/>
-    <rect x='68' y='90' width='12' height='20' rx='5' fill='#4e342e'/>
-    <rect x='30' y='60' width='18' height='12' rx='6' fill='#d7ccc8'/>
-    <rect x='80' y='60' width='18' height='12' rx='6' fill='#d7ccc8'/>
-    <rect x='22' y='52' width='24' height='28' rx='6' fill='url(#metal3)' stroke='#263238' stroke-width='3'/>
-    <circle cx='34' cy='66' r='4' fill='#263238' opacity='0.8'/>
-    <rect x='94' y='57' width='6' height='22' rx='3' fill='url(#wood3)' stroke='#3e2723' stroke-width='2'/>
-    <circle cx='97' cy='56' r='8' fill='url(#metal3)' stroke='#263238' stroke-width='2'/>
-    <circle cx='97' cy='56' r='2' fill='#263238'/>
-  </svg>`
-};
+// ====== PROCEDURAL ENEMY RIG (arms/legs swing) ======
+function makeLimb(w, h, color = 0x5d4037) {
+  const g = new PIXI.Graphics();
+  g.beginFill(color).drawRoundedRect(-w/2, 0, w, h, Math.min(6, w/2)).endFill();
+  g.pivot.set(0, 0);
+  g.position.set(0, 0);
+  return g;
+}
+
+function buildEnemyRig(typeKey) {
+  const cont = new PIXI.Container();
+  cont.name = 'rig';
+
+  // torso
+  const torso = new PIXI.Graphics();
+  const torsoColor = typeKey==='tank'?0x7e57c2: typeKey==='runner'?0x00c853:0xff3b30;
+  torso.beginFill(torsoColor).lineStyle(3, 0x222222, 0.5).drawCircle(0,0,20).endFill();
+  torso.name = 'torso';
+
+  // legs
+  const legL = makeLimb(8, 26, 0x5d4037); legL.name = 'legL'; legL.position.set(-8, 16);
+  const legR = makeLimb(8, 26, 0x5d4037); legR.name = 'legR'; legR.position.set( 8, 16);
+
+  // arms
+  const armL = makeLimb(7, 20, 0xffccbc); armL.name = 'armL'; armL.position.set(-18, -4);
+  const armR = makeLimb(7, 20, 0xffccbc); armR.name = 'armR'; armR.position.set( 18, -4);
+
+  // shield (left)
+  const shield = new PIXI.Graphics();
+  shield.beginFill(0x6d4c41).lineStyle(2, 0x3e2723, 1).drawCircle(0,0,12).endFill();
+  shield.name = 'shield'; shield.position.set(-28, 2);
+
+  // weapon (right)
+  const weapon = new PIXI.Graphics();
+  weapon.beginFill(0x90a4ae).lineStyle(2,0x263238,1).drawRoundedRect(-2,-10,24,6,3).endFill();
+  weapon.name = 'weapon'; weapon.position.set(26, 2);
+
+  cont.addChild(legL, legR, torso, armL, armR, shield, weapon);
+  return cont;
+}
 
 // ====== TOWERS ======
 const TOWER_TYPES = {
@@ -297,11 +243,9 @@ const TOWER_TYPES = {
   mage:   { name: "Маг",    cost: 100,range: TILE_SIZE * 3.0, cooldownSec: 0.90, bulletSpeed: 240, color: 0x7a00ff, damage: 1.5, upgradeCost: 70, dmgType: 'arcane' },
 };
 
-// Прогресс апгрейдов: 10 уровней с подуровнями
 const SUBLEVELS_PER_LEVEL = [3,5,8,11,13,15,17,19,22,25];
 
 export default function App() {
-  // DOM
   const mountRef = useRef(null);
 
   // PIXI и слои
@@ -335,7 +279,6 @@ export default function App() {
   const [breakTime, setBreak] = useState(Math.ceil(breakRef.current));
   const [selectedType, setSelectedType] = useState(null);
   const [selectedTower, setSelectedTower] = useState(null);
-  const [uiTick, setUiTick] = useState(0);
 
   const radiusPreviewRef = useRef(null);
   const selectedRadiusRef = useRef(null);
@@ -351,14 +294,11 @@ export default function App() {
   const STARTRef     = useRef([MARGIN, MARGIN]);
   const BASERef      = useRef([MARGIN, GRID_SIZE - 1 - MARGIN]);
 
-  // Инициализация PIXI
   useEffect(() => {
     try {
       const tg = typeof window !== 'undefined' ? window.Telegram?.WebApp : undefined;
-      tg?.ready?.();
-      tg?.expand?.();
+      tg?.ready?.(); tg?.expand?.();
 
-      // генерим путь
       const enemyPath = buildRandomPath(Date.now());
       const pathSet = new Set(enemyPath.map(([x, y]) => `${x},${y}`));
       enemyPathRef.current = enemyPath;
@@ -377,20 +317,16 @@ export default function App() {
       appRef.current = app;
       mountRef.current?.appendChild(app.view);
 
-      // подготовим текстуры башен и врагов
+      // текстуры башен
       texturesRef.current = {
         archer: PIXI.Texture.from(svgToURI(TOWER_SVGS.archer)),
         cannon: PIXI.Texture.from(svgToURI(TOWER_SVGS.cannon)),
         mage:   PIXI.Texture.from(svgToURI(TOWER_SVGS.mage)),
-        e_grunt:  PIXI.Texture.from(svgToURI(ENEMY_SVGS.grunt)),
-        e_runner: PIXI.Texture.from(svgToURI(ENEMY_SVGS.runner)),
-        e_tank:   PIXI.Texture.from(svgToURI(ENEMY_SVGS.tank)),
       };
 
-      // Камера (контейнер мира)
+      // Камера
       const camera = new PIXI.Container();
-      cameraRef.current = camera;
-      app.stage.addChild(camera);
+      cameraRef.current = camera; app.stage.addChild(camera);
 
       function fit() {
         const baseW = TILE_SIZE * GRID_SIZE;
@@ -399,13 +335,9 @@ export default function App() {
         const maxH = Math.min(window.innerHeight, tg?.viewportHeight ?? Infinity);
         const scale = Math.min(maxW / baseW, maxH / baseH, 1);
         app.renderer.resize(Math.ceil(baseW * scale), Math.ceil(baseH * scale));
-        scaleRef.current = scale;
-        camera.scale.set(scale);
-        camera.position.set(0,0);
+        scaleRef.current = scale; camera.scale.set(scale); camera.position.set(0,0);
       }
-      fit();
-      window.addEventListener("resize", fit);
-      tg?.onEvent?.("viewportChanged", fit);
+      fit(); window.addEventListener("resize", fit); tg?.onEvent?.("viewportChanged", fit);
 
       const gridLayer   = new PIXI.Container();
       const towerLayer  = new PIXI.Container();
@@ -420,9 +352,7 @@ export default function App() {
       camera.addChild(gridLayer, towerLayer, enemyLayer, bulletLayer, uiLayer);
 
       // Сетка
-      const START = STARTRef.current;
-      const BASE  = BASERef.current;
-      const pathSet2 = pathSetRef.current;
+      const START = STARTRef.current; const BASE  = BASERef.current; const pathSet2 = pathSetRef.current;
       for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
           const isPath  = pathSet2.has(`${x},${y}`);
@@ -431,9 +361,7 @@ export default function App() {
           const cell = new PIXI.Graphics();
           cell.lineStyle(1, isPath ? 0x88aaff : 0x999999);
           const fill = isStart ? 0xdfffe0 : isBase ? 0xffe0e0 : isPath ? 0xeef2ff : 0xffffff;
-          cell.beginFill(fill);
-          cell.drawRect(0, 0, TILE_SIZE, TILE_SIZE);
-          cell.endFill();
+          cell.beginFill(fill); cell.drawRect(0, 0, TILE_SIZE, TILE_SIZE); cell.endFill();
           cell.x = x * TILE_SIZE; cell.y = y * TILE_SIZE;
           cell.eventMode = "static"; cell.cursor = "pointer";
           cell.on("pointerover", () => showRadiusPreview(x, y));
@@ -449,54 +377,23 @@ export default function App() {
         }
       }
 
-      // Иконки старта/базы
+      // Иконки
       const startIcon = new PIXI.Text('🚩', { fontSize: Math.floor(TILE_SIZE * 0.8) });
-      startIcon.anchor.set(0.5);
-      startIcon.x = START[0] * TILE_SIZE + TILE_SIZE / 2;
-      startIcon.y = START[1] * TILE_SIZE + TILE_SIZE / 2;
-      uiLayer.addChild(startIcon);
-
+      startIcon.anchor.set(0.5); startIcon.x = START[0] * TILE_SIZE + TILE_SIZE / 2; startIcon.y = START[1] * TILE_SIZE + TILE_SIZE / 2; uiLayer.addChild(startIcon);
       const baseIcon = new PIXI.Text('🏰', { fontSize: Math.floor(TILE_SIZE * 0.8) });
-      baseIcon.anchor.set(0.5);
-      baseIcon.x = BASE[0] * TILE_SIZE + TILE_SIZE / 2;
-      baseIcon.y = BASE[1] * TILE_SIZE + TILE_SIZE / 2;
-      uiLayer.addChild(baseIcon);
+      baseIcon.anchor.set(0.5); baseIcon.x = BASE[0] * TILE_SIZE + TILE_SIZE / 2; baseIcon.y = BASE[1] * TILE_SIZE + TILE_SIZE / 2; uiLayer.addChild(baseIcon);
 
-      // Зум колесом
+      // Зум/пан
       app.view.addEventListener('wheel', (e)=>{
-        e.preventDefault();
-        const cam = cameraRef.current; if(!cam) return;
-        const old = scaleRef.current;
-        const zoom = e.deltaY < 0 ? 1.1 : 0.9;
-        let next = old * zoom;
-        const min=0.4, max=3.0;
-        next = Math.max(min, Math.min(max, next));
-        if (next === old) return;
-        // зум к курсору
-        const rect = app.view.getBoundingClientRect();
-        const mx = (e.clientX - rect.left);
-        const my = (e.clientY - rect.top);
-        const wx = (mx - cam.position.x) / old;
-        const wy = (my - cam.position.y) / old;
-        cam.position.set(mx - wx*next, my - wy*next);
-        cam.scale.set(next);
-        scaleRef.current = next;
+        e.preventDefault(); const cam = cameraRef.current; if(!cam) return;
+        const old = scaleRef.current; const zoom = e.deltaY < 0 ? 1.1 : 0.9; let next = Math.max(0.4, Math.min(3.0, old * zoom)); if (next === old) return;
+        const rect = app.view.getBoundingClientRect(); const mx = (e.clientX - rect.left); const my = (e.clientY - rect.top);
+        const wx = (mx - cam.position.x) / old; const wy = (my - cam.position.y) / old;
+        cam.position.set(mx - wx*next, my - wy*next); cam.scale.set(next); scaleRef.current = next;
       }, { passive:false });
-
-      // Панорамирование перетаскиванием
-      app.view.addEventListener('pointerdown', (e)=>{
-        isDraggingRef.current = true; lastPosRef.current = { x: e.clientX, y: e.clientY };
-      });
+      app.view.addEventListener('pointerdown', (e)=>{ isDraggingRef.current = true; lastPosRef.current = { x: e.clientX, y: e.clientY }; });
       window.addEventListener('pointerup', ()=>{ isDraggingRef.current=false; });
-      window.addEventListener('pointermove', (e)=>{
-        if (!isDraggingRef.current) return;
-        const cam = cameraRef.current; if(!cam) return;
-        const dx = e.clientX - lastPosRef.current.x;
-        const dy = e.clientY - lastPosRef.current.y;
-        cam.position.x += dx;
-        cam.position.y += dy;
-        lastPosRef.current = { x: e.clientX, y: e.clientY };
-      });
+      window.addEventListener('pointermove', (e)=>{ if (!isDraggingRef.current) return; const cam = cameraRef.current; if(!cam) return; const dx = e.clientX - lastPosRef.current.x; const dy = e.clientY - lastPosRef.current.y; cam.position.x += dx; cam.position.y += dy; lastPosRef.current = { x: e.clientX, y: e.clientY }; });
 
       app.ticker.add(tick);
 
@@ -519,181 +416,76 @@ export default function App() {
       setLives(livesRef.current);
       setWave(waveRef.current);
       setBreak(Math.max(0, Math.ceil(breakRef.current)));
-      setUiTick(t => t + 1);
+      setSelectedTower(t => (t ? {...t} : t));
     }, 100);
     return () => clearInterval(id);
   }, []);
 
   // ====== GAME FUNCS ======
-  function createTowerUI(x, y, conf){
+  function createTowerUI(x, y){
     const cont = new PIXI.Container();
-
     const barBg = new PIXI.Graphics();
     const w = Math.floor(TILE_SIZE*0.9), h = 6;
     barBg.beginFill(0x222222, 0.7).drawRoundedRect(-w/2, -TILE_SIZE*0.55, w, h, 3).endFill();
-
     const barFill = new PIXI.Graphics();
-
     const lvlText = new PIXI.Text('I', { fontSize: Math.floor(TILE_SIZE*0.35), fill: 0x111111 });
-    lvlText.anchor.set(1, 0.5);
-    lvlText.x = -w/2 - 6; lvlText.y = -TILE_SIZE*0.55 + h/2;
-
+    lvlText.anchor.set(1, 0.5); lvlText.x = -w/2 - 6; lvlText.y = -TILE_SIZE*0.55 + h/2;
     const ticks = new PIXI.Graphics();
-
-    cont.addChild(barBg, barFill, ticks, lvlText);
-    cont.x = x; cont.y = y;
-    uiLayerRef.current.addChild(cont);
-
+    cont.addChild(barBg, barFill, ticks, lvlText); cont.x = x; cont.y = y; uiLayerRef.current.addChild(cont);
     return { uiCont: cont, barBg, barFill, lvlText, ticks, w, h };
   }
 
   function redrawTowerProgress(tw){
-    const lvl = tw.level; const sub = tw.sublevel;
-    const need = SUBLEVELS_PER_LEVEL[Math.min(lvl-1, SUBLEVELS_PER_LEVEL.length-1)];
+    const need = SUBLEVELS_PER_LEVEL[Math.min(tw.level-1, SUBLEVELS_PER_LEVEL.length-1)];
     const { barFill, lvlText, ticks, w, h } = tw.ui;
-
-    lvlText.text = toRoman(lvl);
-
-    const ratio = Math.min(1, sub / need);
-    barFill.clear();
-    barFill.beginFill(0x00c853).drawRoundedRect(-w/2+1, -TILE_SIZE*0.55+1, Math.max(0, (w-2)*ratio), h-2, 2).endFill();
-
-    ticks.clear();
-    ticks.lineStyle(1, 0xffffff, 0.65);
-    for (let i=1;i<need;i++){
-      const x = -w/2 + (w*i/need);
-      ticks.moveTo(x, -TILE_SIZE*0.55);
-      ticks.lineTo(x, -TILE_SIZE*0.55 + h);
-    }
+    lvlText.text = toRoman(tw.level);
+    const ratio = Math.min(1, tw.sublevel / need);
+    barFill.clear(); barFill.beginFill(0x00c853).drawRoundedRect(-w/2+1, -TILE_SIZE*0.55+1, Math.max(0, (w-2)*ratio), h-2, 2).endFill();
+    ticks.clear(); ticks.lineStyle(1, 0xffffff, 0.65); for (let i=1;i<need;i++){ const x = -w/2 + (w*i/need); ticks.moveTo(x, -TILE_SIZE*0.55); ticks.lineTo(x, -TILE_SIZE*0.55 + h); }
   }
 
   function levelUp(tw){
-    tw.conf.range *= 1.12;
-    tw.conf.damage *= 1.18;
-    tw.conf.cooldownSec = Math.max(0.35, tw.conf.cooldownSec * 0.94);
-
-    const flash = new PIXI.Graphics();
-    flash.lineStyle(4, 0x00c853, 0.9);
-    flash.drawCircle(0,0, TILE_SIZE*0.6);
-    flash.x = tw.x; flash.y = tw.y;
-    uiLayerRef.current.addChild(flash);
-    let a = 1;
-    const app = appRef.current;
-    const fade = (d)=>{
-      const dt = typeof d === 'number' ? d : (d?.deltaTime ?? 1);
-      a -= (dt/60)*1.2; flash.alpha = Math.max(0,a);
-      if (a<=0){ uiLayerRef.current.removeChild(flash); flash.destroy(); app.ticker.remove(fade); }
-    };
-    app.ticker.add(fade);
+    tw.conf.range *= 1.12; tw.conf.damage *= 1.18; tw.conf.cooldownSec = Math.max(0.35, tw.conf.cooldownSec * 0.94);
+    const flash = new PIXI.Graphics(); flash.lineStyle(4, 0x00c853, 0.9); flash.drawCircle(0,0, TILE_SIZE*0.6);
+    flash.x = tw.x; flash.y = tw.y; uiLayerRef.current.addChild(flash);
+    let a = 1; const app = appRef.current; const fade = (d)=>{ const dt = typeof d === 'number' ? d : (d?.deltaTime ?? 1); a -= (dt/60)*1.2; flash.alpha = Math.max(0,a); if (a<=0){ uiLayerRef.current.removeChild(flash); flash.destroy(); app.ticker.remove(fade); } }; app.ticker.add(fade);
   }
 
   function placeTower(cx, cy, typeKey) {
     const conf = { ...TOWER_TYPES[typeKey] };
-
-    const cont = new PIXI.Container();
-    cont.x = cx * TILE_SIZE + TILE_SIZE / 2;
-    cont.y = cy * TILE_SIZE + TILE_SIZE / 2;
-
-    const shadow = new PIXI.Graphics();
-    shadow.beginFill(0x000000, 0.18).drawEllipse(0, TILE_SIZE*0.28, TILE_SIZE*0.32, TILE_SIZE*0.14).endFill();
-    cont.addChild(shadow);
-
-    const tex = texturesRef.current[typeKey] || PIXI.Texture.WHITE;
-    const sprite = new PIXI.Sprite(tex);
-    sprite.anchor.set(0.5);
-    const targetSize = TILE_SIZE * 0.86;
-    const scale = targetSize / 128; // SVG 128x128
-    sprite.scale.set(scale);
-    cont.addChild(sprite);
-
-    cont._phase = Math.random()*Math.PI*2;
-
-    cont.eventMode = "static";
-    cont.cursor = "pointer";
-    cont.on("pointerdown", () => selectTowerBySprite(cont));
-
+    const cont = new PIXI.Container(); cont.x = cx * TILE_SIZE + TILE_SIZE / 2; cont.y = cy * TILE_SIZE + TILE_SIZE / 2;
+    const shadow = new PIXI.Graphics(); shadow.beginFill(0x000000, 0.18).drawEllipse(0, TILE_SIZE*0.28, TILE_SIZE*0.32, TILE_SIZE*0.14).endFill(); cont.addChild(shadow);
+    const tex = texturesRef.current[typeKey] || PIXI.Texture.WHITE; const sprite = new PIXI.Sprite(tex);
+    sprite.anchor.set(0.5); const targetSize = TILE_SIZE * 0.86; const scale = targetSize / 128; sprite.scale.set(scale); cont.addChild(sprite);
+    cont._phase = Math.random()*Math.PI*2; cont.eventMode = "static"; cont.cursor = "pointer"; cont.on("pointerdown", () => selectTowerBySprite(cont));
     towerLayerRef.current.addChild(cont);
 
-    const ui = createTowerUI(cont.x, cont.y, conf);
-
-    const tower = {
-      x: cont.x,
-      y: cont.y,
-      cx,
-      cy,
-      conf,
-      cooldownLeft: 0,
-      sprite: cont,
-      ui,
-      level: 1,
-      sublevel: 0,
-      invested: conf.cost,
-    };
-    towersRef.current.push(tower);
-    redrawTowerProgress(tower);
-
-    occupiedRef.current.add(`${cx},${cy}`);
-    goldRef.current -= conf.cost;
+    const ui = createTowerUI(cont.x, cont.y);
+    const tower = { x: cont.x, y: cont.y, cx, cy, conf, cooldownLeft: 0, sprite: cont, ui, level: 1, sublevel: 0, invested: conf.cost };
+    towersRef.current.push(tower); redrawTowerProgress(tower);
+    occupiedRef.current.add(`${cx},${cy}`); goldRef.current -= conf.cost;
   }
 
-  function upgradeTowerByClick(sprite) {
-    const tw = towersRef.current.find(t => t.sprite === sprite);
-    if (!tw) return;
-    upgradeTower(tw);
-  }
-
-  function selectTowerBySprite(sprite){
-    const tw = towersRef.current.find(t => t.sprite === sprite);
-    if (!tw) return;
-    hideSelectedRadius();
-    setSelectedTower(tw);
-    showSelectedRadius(tw);
-  }
+  function selectTowerBySprite(sprite){ const tw = towersRef.current.find(t => t.sprite === sprite); if (!tw) return; hideSelectedRadius(); setSelectedTower(tw); showSelectedRadius(tw); }
 
   function upgradeTower(tw){
-    const cost = tw.conf.upgradeCost ?? 50; if (goldRef.current < cost) return;
-    goldRef.current -= cost; tw.invested += cost;
-    const maxLevel = 10;
-    const need = SUBLEVELS_PER_LEVEL[Math.min(tw.level-1, SUBLEVELS_PER_LEVEL.length-1)];
-    tw.sublevel += 1;
-    const ping = new PIXI.Graphics();
-    ping.beginFill(0xffffff, 0.5).drawCircle(0,0,TILE_SIZE/3).endFill();
-    ping.x = tw.x; ping.y = tw.y; uiLayerRef.current.addChild(ping);
+    const cost = tw.conf.upgradeCost ?? 50; if (goldRef.current < cost) return; goldRef.current -= cost; tw.invested += cost;
+    const maxLevel = 10; const need = SUBLEVELS_PER_LEVEL[Math.min(tw.level-1, SUBLEVELS_PER_LEVEL.length-1)];
+    tw.sublevel += 1; const ping = new PIXI.Graphics(); ping.beginFill(0xffffff, 0.5).drawCircle(0,0,TILE_SIZE/3).endFill(); ping.x = tw.x; ping.y = tw.y; uiLayerRef.current.addChild(ping);
     let a=0.5; const app = appRef.current; const fade=(d)=>{ const dt=typeof d==='number'?d:(d?.deltaTime??1); a-=(dt/60)*2; ping.alpha=Math.max(0,a); if(a<=0){ uiLayerRef.current.removeChild(ping); ping.destroy(); app.ticker.remove(fade);} }; app.ticker.add(fade);
     if (tw.sublevel >= need && tw.level < maxLevel){ tw.level += 1; tw.sublevel = 0; levelUp(tw); }
-    redrawTowerProgress(tw);
-    showSelectedRadius(tw);
-    setUiTick(t => t + 1);
+    redrawTowerProgress(tw); showSelectedRadius(tw);
   }
 
   function sellTower(tw){
-    const base = tw.conf.cost||0; const extra = Math.max(0, (tw.invested||base) - base);
-    const refund = Math.round(base*0.5 + extra*0.25);
-    goldRef.current += refund;
-
-    if (typeof tw.cx === 'number' && typeof tw.cy === 'number') {
-      occupiedRef.current.delete(`${tw.cx},${tw.cy}`);
-    } else {
-      const gx = Math.round((tw.x - TILE_SIZE/2)/TILE_SIZE);
-      const gy = Math.round((tw.y - TILE_SIZE/2)/TILE_SIZE);
-      occupiedRef.current.delete(`${gx},${gy}`);
-    }
-
+    const base = tw.conf.cost||0; const extra = Math.max(0, (tw.invested||base) - base); const refund = Math.round(base*0.5 + extra*0.25); goldRef.current += refund;
+    if (typeof tw.cx === 'number' && typeof tw.cy === 'number') { occupiedRef.current.delete(`${tw.cx},${tw.cy}`); } else { const gx = Math.round((tw.x - TILE_SIZE/2)/TILE_SIZE); const gy = Math.round((tw.y - TILE_SIZE/2)/TILE_SIZE); occupiedRef.current.delete(`${gx},${gy}`); }
     if (tw.ui?.uiCont) { uiLayerRef.current.removeChild(tw.ui.uiCont); tw.ui.uiCont.destroy({children:true}); }
     if (tw.sprite?.parent) { towerLayerRef.current.removeChild(tw.sprite); tw.sprite.destroy(); }
-    const idx = towersRef.current.indexOf(tw); if (idx!==-1) towersRef.current.splice(idx,1);
-    hideSelectedRadius();
-    setSelectedTower(null);
+    const idx = towersRef.current.indexOf(tw); if (idx!==-1) towersRef.current.splice(idx,1); hideSelectedRadius(); setSelectedTower(null);
   }
 
-  function startWave() {
-    if (isWaveActiveRef.current) return;
-    const conf = getWaveConf(waveRef.current);
-    spawnRef.current.toSpawn = conf.enemies;
-    spawnRef.current.timerSec = 0.5;
-    isWaveActiveRef.current = true;
-    waveRef.current += 1;
-  }
+  function startWave() { if (isWaveActiveRef.current) return; const conf = getWaveConf(waveRef.current); spawnRef.current.toSpawn = conf.enemies; spawnRef.current.timerSec = 0.5; isWaveActiveRef.current = true; waveRef.current += 1; }
 
   function spawnEnemy() {
     const idx = Math.max(0, waveRef.current - 1);
@@ -705,62 +497,28 @@ export default function App() {
     const speed = base.speed * et.speedMul;
 
     const cont = new PIXI.Container();
-    const shadow = new PIXI.Graphics();
-    shadow.beginFill(0x000000, 0.18).drawEllipse(0, TILE_SIZE*0.28, TILE_SIZE*0.30, TILE_SIZE*0.12).endFill();
-    cont.addChild(shadow);
+    const shadow = new PIXI.Graphics(); shadow.beginFill(0x000000, 0.18).drawEllipse(0, TILE_SIZE*0.28, TILE_SIZE*0.30, TILE_SIZE*0.12).endFill(); cont.addChild(shadow);
 
-    const texMap = {
-      grunt: texturesRef.current.e_grunt,
-      runner: texturesRef.current.e_runner,
-      tank: texturesRef.current.e_tank,
-    };
-    const s = new PIXI.Sprite(texMap[typeKey] || texturesRef.current.e_grunt);
-    s.anchor.set(0.5);
-    s.name = 'body';
-    const target = TILE_SIZE * 0.80;
-    const scale = target / 128;
-    s.scale.set(scale);
-    cont.addChild(s);
+    // Процедурный риг вместо плоского спрайта
+    const rig = buildEnemyRig(typeKey);
+    cont.addChild(rig);
 
-    const barBg = new PIXI.Graphics();
-    const w = Math.floor(TILE_SIZE*0.9), h = 6;
+    // HP bar
+    const barBg = new PIXI.Graphics(); const w = Math.floor(TILE_SIZE*0.9), h = 6;
     barBg.beginFill(0x222222, 0.7).drawRoundedRect(-w/2, -TILE_SIZE*0.55, w, h, 3).endFill();
-    const barFill = new PIXI.Graphics();
-    const ticks = new PIXI.Graphics();
-    ticks.lineStyle(1, 0xffffff, 0.65);
-    const segs = Math.max(1, Math.min(20, hpMax));
-    for (let i=1;i<segs;i++){
-      const x = -w/2 + (w*i/segs);
-      ticks.moveTo(x, -TILE_SIZE*0.55);
-      ticks.lineTo(x, -TILE_SIZE*0.55 + h);
-    }
+    const barFill = new PIXI.Graphics(); const ticks = new PIXI.Graphics(); ticks.lineStyle(1, 0xffffff, 0.65);
+    const segs = Math.max(1, Math.min(20, hpMax)); for (let i=1;i<segs;i++){ const x = -w/2 + (w*i/segs); ticks.moveTo(x, -TILE_SIZE*0.55); ticks.lineTo(x, -TILE_SIZE*0.55 + h); }
     cont.addChild(barBg, barFill, ticks);
-
-    const updateHp = (hp)=>{
-      const ratio = Math.max(0, Math.min(1, hp / hpMax));
-      barFill.clear();
-      barFill.beginFill(0xff4d4f).drawRoundedRect(-w/2+1, -TILE_SIZE*0.55+1, Math.max(0,(w-2)*ratio), h-2, 2).endFill();
-    };
+    const updateHp = (hp)=>{ const ratio = Math.max(0, Math.min(1, hp / hpMax)); barFill.clear(); barFill.beginFill(0xff4d4f).drawRoundedRect(-w/2+1, -TILE_SIZE*0.55+1, Math.max(0,(w-2)*ratio), h-2, 2).endFill(); };
     updateHp(hpMax);
 
     enemyLayerRef.current.addChild(cont);
 
-    enemiesRef.current.push({
-      sprite: cont,
-      typeKey,
-      pathIndex: 0,
-      speed,
-      hp: hpMax,
-      hpMax,
-      updateHp,
-      _rotPhase: Math.random() * Math.PI * 2,
-    });
+    enemiesRef.current.push({ sprite: cont, typeKey, pathIndex: 0, speed, hp: hpMax, hpMax, updateHp, _step: 0 });
   }
 
   function fireBullet(tower, target) {
-    const sprite = new PIXI.Graphics();
-    sprite.beginFill(0xffd60a); sprite.drawCircle(0,0,5); sprite.endFill();
-    sprite.x = tower.x; sprite.y = tower.y; bulletLayerRef.current.addChild(sprite);
+    const sprite = new PIXI.Graphics(); sprite.beginFill(0xffd60a); sprite.drawCircle(0,0,5); sprite.endFill(); sprite.x = tower.x; sprite.y = tower.y; bulletLayerRef.current.addChild(sprite);
     const dx = target.sprite.x - tower.x, dy = target.sprite.y - tower.y; const d = Math.hypot(dx,dy)||1; const speed = tower.conf.bulletSpeed;
     bulletsRef.current.push({ sprite, vx:(dx/d)*speed, vy:(dy/d)*speed, speed, target, damage:tower.conf.damage });
   }
@@ -778,99 +536,54 @@ export default function App() {
   function showSelectedRadius(tw){ hideSelectedRadius(); if(!tw) return; const g=new PIXI.Graphics(); g.lineStyle(2,0x00cc66,0.5); g.beginFill(0x00cc66,0.08); g.drawCircle(tw.x, tw.y, tw.conf.range); g.endFill(); selectedRadiusRef.current=g; uiLayerRef.current.addChild(g); }
   function hideSelectedRadius(){ const g=selectedRadiusRef.current; if(g?.parent){ g.parent.removeChild(g); g.destroy(); } selectedRadiusRef.current=null; }
 
-  // Главный тик
+  // ====== MAIN TICK ======
   function tick(d){
-    const app = appRef.current; if(!app) return;
-    const dt = typeof d === 'number' ? d : (d?.deltaTime ?? 1);
-    const dtSec = dt/60;
-    const enemyPath = enemyPathRef.current;
+    const app = appRef.current; if(!app) return; const dt = typeof d === 'number' ? d : (d?.deltaTime ?? 1); const dtSec = dt/60; const enemyPath = enemyPathRef.current;
 
-    if (!isWaveActiveRef.current && breakRef.current > 0) {
-      breakRef.current = Math.max(0, breakRef.current - dtSec);
-      if (breakRef.current <= 0) { breakRef.current = 0; startWave(); }
-    }
+    if (!isWaveActiveRef.current && breakRef.current > 0) { breakRef.current = Math.max(0, breakRef.current - dtSec); if (breakRef.current <= 0) { breakRef.current = 0; startWave(); } }
 
     if (isWaveActiveRef.current) {
-      if (spawnRef.current.toSpawn > 0) {
-        spawnRef.current.timerSec -= dtSec;
-        if (spawnRef.current.timerSec <= 0) {
-          spawnEnemy();
-          spawnRef.current.toSpawn -= 1;
-          spawnRef.current.timerSec = 0.75;
-        }
-      }
-      if (spawnRef.current.toSpawn === 0 && enemiesRef.current.length === 0) {
-        isWaveActiveRef.current = false;
-        breakRef.current = 8;
-      }
+      if (spawnRef.current.toSpawn > 0) { spawnRef.current.timerSec -= dtSec; if (spawnRef.current.timerSec <= 0) { spawnEnemy(); spawnRef.current.toSpawn -= 1; spawnRef.current.timerSec = 0.75; } }
+      if (spawnRef.current.toSpawn === 0 && enemiesRef.current.length === 0) { isWaveActiveRef.current = false; breakRef.current = 8; }
     }
 
-    // движение врагов
+    // движение врагов + походка
     for (let i = enemiesRef.current.length - 1; i >= 0; i--) {
-      const en = enemiesRef.current[i];
-      if (!en.sprite?.parent) { enemiesRef.current.splice(i,1); continue; }
+      const en = enemiesRef.current[i]; if (!en.sprite?.parent) { enemiesRef.current.splice(i,1); continue; }
       const iCell = Math.floor(en.pathIndex);
       if (iCell < enemyPath.length - 1) {
-        const t = en.pathIndex - iCell;
-        const [ax, ay] = enemyPath[iCell];
-        const [bx, by] = enemyPath[iCell + 1];
-        en.sprite.x = (ax + (bx-ax)*t)*TILE_SIZE + TILE_SIZE/2;
-        en.sprite.y = (ay + (by-ay)*t)*TILE_SIZE + TILE_SIZE/2;
-        en.pathIndex += en.speed * dtSec;
+        const t = en.pathIndex - iCell; const [ax, ay] = enemyPath[iCell]; const [bx, by] = enemyPath[iCell + 1];
+        en.sprite.x = (ax + (bx-ax)*t)*TILE_SIZE + TILE_SIZE/2; en.sprite.y = (ay + (by-ay)*t)*TILE_SIZE + TILE_SIZE/2; en.pathIndex += en.speed * dtSec;
 
-        // флип тела по направлению движения + лёгкая качка
-        const body = en.sprite.getChildByName?.('body');
-        if (body) {
-          const dirX = bx - ax;
-          const base = Math.abs(body.scale.x) || (TILE_SIZE*0.80/128);
-          body.scale.x = (dirX < 0 ? -base : base);
-          en._rotPhase += dtSec * 2.5;
-          body.rotation = Math.sin(en._rotPhase) * 0.08;
+        const rig = en.sprite.getChildByName?.('rig');
+        if (rig) {
+          const dirX = bx - ax; rig.scale.x = dirX < 0 ? -1 : 1;
+          en._step += dtSec * (2.8 + en.speed * 1.8);
+          const swing = 0.55; const legL = rig.getChildByName('legL'); const legR = rig.getChildByName('legR'); const armL = rig.getChildByName('armL'); const armR = rig.getChildByName('armR');
+          if (legL && legR) { legL.rotation = Math.sin(en._step) * swing; legR.rotation = -Math.sin(en._step) * swing; }
+          if (armL && armR) { armL.rotation = -Math.sin(en._step) * (swing * 0.6); armR.rotation = Math.sin(en._step) * (swing * 0.6); }
+          const bob = Math.abs(Math.sin(en._step)) * 1.8; rig.y = -bob;
         }
       } else {
-        enemyLayerRef.current.removeChild(en.sprite);
-        en.sprite.destroy(); enemiesRef.current.splice(i,1);
-        livesRef.current -= 1;
-        if (livesRef.current <= 0) { showOverlay('💀 Game Over'); app.ticker.stop(); }
+        enemyLayerRef.current.removeChild(en.sprite); en.sprite.destroy(); enemiesRef.current.splice(i,1);
+        livesRef.current -= 1; if (livesRef.current <= 0) { showOverlay('💀 Game Over'); app.ticker.stop(); }
       }
     }
 
     // стрельба и анимация башен
     towersRef.current.forEach(t => {
-      if (t.sprite && typeof t.sprite._phase === 'number'){
-        t.sprite._phase += dtSec * 2.0;
-        const offset = Math.sin(t.sprite._phase) * 1.2;
-        t.sprite.y = t.y + offset;
-      }
-
+      if (t.sprite && typeof t.sprite._phase === 'number'){ t.sprite._phase += dtSec * 2.0; const offset = Math.sin(t.sprite._phase) * 1.2; t.sprite.y = t.y + offset; }
       if (t.cooldownLeft > 0) { t.cooldownLeft = Math.max(0, t.cooldownLeft - dtSec); return; }
-      let target=null, best=Infinity;
-      enemiesRef.current.forEach(en => { if(!en.sprite?.parent) return; const dx=en.sprite.x - t.x; const dy=en.sprite.y - t.y; const d=Math.hypot(dx,dy); if(d<=t.conf.range && d<best){ best=d; target=en; } });
+      let target=null, best=Infinity; enemiesRef.current.forEach(en => { if(!en.sprite?.parent) return; const dx=en.sprite.x - t.x; const dy=en.sprite.y - t.y; const d=Math.hypot(dx,dy); if(d<=t.conf.range && d<best){ best=d; target=en; } });
       if (target) { fireBullet(t, target); t.cooldownLeft = t.conf.cooldownSec; }
     });
 
     // пули
     for (let i = bulletsRef.current.length - 1; i >= 0; i--) {
-      const b = bulletsRef.current[i];
-      if (!b.target || !enemiesRef.current.includes(b.target) || !b.target.sprite?.parent) {
-        bulletLayerRef.current.removeChild(b.sprite); b.sprite.destroy(); bulletsRef.current.splice(i,1); continue;
-      }
+      const b = bulletsRef.current[i]; if (!b.target || !enemiesRef.current.includes(b.target) || !b.target.sprite?.parent) { bulletLayerRef.current.removeChild(b.sprite); b.sprite.destroy(); bulletsRef.current.splice(i,1); continue; }
       const dx = b.target.sprite.x - b.sprite.x; const dy = b.target.sprite.y - b.sprite.y; const d2 = Math.hypot(dx,dy)||1; const speed=b.speed;
-      b.vx = (dx/d2)*speed; b.vy = (dy/d2)*speed;
-      b.sprite.x += b.vx * dtSec; b.sprite.y += b.vy * dtSec;
-      if (Math.hypot(dx,dy) < 10) {
-        bulletLayerRef.current.removeChild(b.sprite); b.sprite.destroy(); bulletsRef.current.splice(i,1);
-        b.target.hp -= b.damage;
-        if (b.target.hp > 0) {
-          if (b.target.updateHp) b.target.updateHp(b.target.hp);
-        } else {
-          enemyLayerRef.current.removeChild(b.target.sprite);
-          b.target.sprite.destroy();
-          const idx2 = enemiesRef.current.indexOf(b.target);
-          if (idx2 !== -1) enemiesRef.current.splice(idx2, 1);
-          goldRef.current += 10;
-        }
-      }
+      b.vx = (dx/d2)*speed; b.vy = (dy/d2)*speed; b.sprite.x += b.vx * dtSec; b.sprite.y += b.vy * dtSec;
+      if (Math.hypot(dx,dy) < 10) { bulletLayerRef.current.removeChild(b.sprite); b.sprite.destroy(); bulletsRef.current.splice(i,1); b.target.hp -= b.damage; if (b.target.hp > 0) { if (b.target.updateHp) b.target.updateHp(b.target.hp); } else { enemyLayerRef.current.removeChild(b.target.sprite); b.target.sprite.destroy(); const idx2 = enemiesRef.current.indexOf(b.target); if (idx2 !== -1) enemiesRef.current.splice(idx2, 1); goldRef.current += 10; } }
     }
   }
 
@@ -880,14 +593,7 @@ export default function App() {
 
   const tg = typeof window !== 'undefined' ? window.Telegram?.WebApp : undefined;
   const isDark = tg?.colorScheme === 'dark';
-  const panelStyle = {
-    display:'flex', gap:16, alignItems:'center', padding:'8px 12px', borderRadius:8,
-    background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-    color: isDark ? '#fff' : '#111',
-    boxShadow: isDark ? '0 2px 10px rgba(0,0,0,0.3)' : '0 2px 10px rgba(0,0,0,0.1)',
-    fontSize:'18px', position:'sticky', top:0, zIndex:10
-  };
-
+  const panelStyle = { display:'flex', gap:16, alignItems:'center', padding:'8px 12px', borderRadius:8, background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', color: isDark ? '#fff' : '#111', boxShadow: isDark ? '0 2px 10px rgba(0,0,0,0.3)' : '0 2px 10px rgba(0,0,0,0.1)', fontSize:'18px', position:'sticky', top:0, zIndex:10 };
   const startDisabled = isWaveActiveRef.current;
 
   return (
@@ -901,10 +607,8 @@ export default function App() {
 
       <div ref={mountRef} style={{ background:'#ddd', borderRadius:8, width:'100%', maxWidth:'100vw', touchAction:'none' }} />
 
-      {/* отступ под фиксированную нижнюю панель */}
       <div style={{ height: `calc(${BOTTOM_BAR_HEIGHT}px + env(safe-area-inset-bottom, 0px))` }} />
 
-      {/* Нижняя панель: строить ИЛИ инфо о башне */}
       {!selectedTower ? (
         <div style={{ position:'fixed', left:0, right:0, bottom:0, zIndex:20, background:'#fff', borderTop:'1px solid #ccc', boxShadow:'0 -2px 10px rgba(0,0,0,0.12)', padding:`10px 12px calc(10px + env(safe-area-inset-bottom, 0px))`, height: BOTTOM_BAR_HEIGHT, display:'flex', flexDirection:'column', gap:8 }}>
           <div style={{ display:'flex', gap:10, flexWrap:'wrap', justifyContent:'center' }}>
