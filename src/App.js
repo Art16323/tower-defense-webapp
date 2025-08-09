@@ -11,9 +11,9 @@ const enemyPath = [
 const pathSet = new Set(enemyPath.map(([x, y]) => `${x},${y}`));
 
 const TOWER_TYPES = {
-  archer: { name: 'Лучник', cost: 50, range: TILE_SIZE * 2, cooldownMax: 45, bulletSpeed: 3, color: 0x1e90ff, damage: 1, upgradeCost: 40 },
-  cannon: { name: 'Пушка', cost: 80, range: TILE_SIZE * 2.5, cooldownMax: 70, bulletSpeed: 2.4, color: 0x5555ff, damage: 2, upgradeCost: 60 },
-  mage:   { name: 'Маг', cost: 100, range: TILE_SIZE * 3, cooldownMax: 55, bulletSpeed: 3.2, color: 0x7a00ff, damage: 1.5, upgradeCost: 70 },
+  archer: { name: 'Лучник', cost: 50, range: TILE_SIZE * 2, cooldownMax: 45, bulletSpeed: 3, color: 0x1e90ff, damage: 1 },
+  cannon: { name: 'Пушка', cost: 80, range: TILE_SIZE * 2.5, cooldownMax: 70, bulletSpeed: 2.4, color: 0xffa500, damage: 2 },
+  mage:   { name: 'Маг', cost: 100, range: TILE_SIZE * 3, cooldownMax: 55, bulletSpeed: 3.2, color: 0x7a00ff, damage: 1.5 },
 };
 
 const WAVES = [
@@ -51,7 +51,7 @@ function App() {
 
     const occupied = new Set();
 
-    // Сетка
+    // Сетка (рисуем один раз)
     for (let y = 0; y < GRID_SIZE; y++) {
       for (let x = 0; x < GRID_SIZE; x++) {
         const g = new PIXI.Graphics();
@@ -78,22 +78,37 @@ function App() {
       }
     }
 
+    // Функция установки башни
     function placeTower(cx, cy, typeKey) {
       const conf = { ...TOWER_TYPES[typeKey] };
       const tower = new PIXI.Graphics();
+      tower.lineStyle(2, 0x000000); // контур
       tower.beginFill(conf.color);
       tower.drawCircle(0, 0, TILE_SIZE / 3);
       tower.endFill();
       tower.x = cx * TILE_SIZE + TILE_SIZE / 2;
       tower.y = cy * TILE_SIZE + TILE_SIZE / 2;
+      tower.scale.set(0.1); // эффект появления
+
       app.stage.addChild(tower);
 
-      const towerData = { x: tower.x, y: tower.y, conf, cooldown: 0, sprite: tower };
-      towersRef.current.push(towerData);
+      // Анимация плавного появления
+      app.ticker.add(function grow() {
+        if (tower.scale.x < 1) {
+          tower.scale.x += 0.1;
+          tower.scale.y += 0.1;
+        } else {
+          tower.scale.set(1);
+          app.ticker.remove(grow);
+        }
+      });
+
+      towersRef.current.push({ x: tower.x, y: tower.y, conf, cooldown: 0, sprite: tower });
       occupied.add(`${cx},${cy}`);
       setGold(g => g - conf.cost);
     }
 
+    // Запуск волны
     function startWave() {
       if (spawnDataRef.current.active) return;
       if (wave >= WAVES.length) return;
@@ -101,9 +116,9 @@ function App() {
       spawnDataRef.current = { active: true, timer: 60, toSpawn: waveConf.enemies };
       setWave(w => w + 1);
     }
-
     window.addEventListener('startWave', startWave);
 
+    // Игровой цикл
     app.ticker.add(() => {
       const enemies = enemiesRef.current;
       const bullets = bulletsRef.current;
@@ -136,6 +151,10 @@ function App() {
       // Движение врагов
       for (let i = enemies.length - 1; i >= 0; i--) {
         const enemy = enemies[i];
+        if (!enemy.sprite || !enemy.sprite.parent) {
+          enemies.splice(i, 1);
+          continue;
+        }
         if (enemy.pathIndex < enemyPath.length) {
           const [x, y] = enemyPath[Math.floor(enemy.pathIndex)];
           enemy.sprite.x = x * TILE_SIZE + TILE_SIZE / 2;
@@ -152,7 +171,7 @@ function App() {
         }
       }
 
-      // Стрельба
+      // Стрельба башен
       towers.forEach(t => {
         if (t.cooldown > 0) { t.cooldown--; return; }
         let target = null;
@@ -189,13 +208,13 @@ function App() {
       // Пули
       for (let i = bullets.length - 1; i >= 0; i--) {
         const b = bullets[i];
-        b.x += b.vx;
-        b.y += b.vy;
-        if (!b.target || !enemies.includes(b.target)) {
+        if (!b.target || !enemies.includes(b.target) || !b.target.sprite?.parent) {
           app.stage.removeChild(b);
           bullets.splice(i, 1);
           continue;
         }
+        b.x += b.vx;
+        b.y += b.vy;
         const hit = Math.hypot(b.target.sprite.x - b.x, b.target.sprite.y - b.y) < 10;
         if (hit) {
           app.stage.removeChild(b);
@@ -203,8 +222,7 @@ function App() {
           b.target.hp -= b.damage;
           if (b.target.hp <= 0) {
             app.stage.removeChild(b.target.sprite);
-            const idx = enemies.indexOf(b.target);
-            if (idx !== -1) enemies.splice(idx, 1);
+            enemies.splice(enemies.indexOf(b.target), 1);
             setGold(g => g + 10);
           }
         }
