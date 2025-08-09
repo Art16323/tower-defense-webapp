@@ -197,16 +197,21 @@ const TOWER_SVGS = {
     <circle cx='64' cy='52' r='6' fill='#fff'/>
   </svg>`
 };
-function svgToURI(svg){ return 'data:image/svg+xml;base64,' + btoa(svg); }
+
+// =================== SVG helper ===================
+function svgToURI(svg) {
+  // Кодируем в UTF-8 и вставляем напрямую без base64
+  return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+}
 
 // ====== SPRITE ENEMIES (SVG) ======
 const ENEMY_SVGS = {
- // Базовый пехотинец: круглый щит + короткий меч
+  // Базовый пехотинец
   grunt: `<?xml version='1.0'?>
   <svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 128 128'>
     <defs>
       <linearGradient id='torso1' x1='0' x2='0' y1='0' y2='1'>
-       <stop offset='0%' stop-color='#ff9e80'/>
+        <stop offset='0%' stop-color='#ff9e80'/>
         <stop offset='100%' stop-color='#ff3b30'/>
       </linearGradient>
       <linearGradient id='shield1' x1='0' x2='1' y1='0' y2='1'>
@@ -218,26 +223,19 @@ const ENEMY_SVGS = {
         <stop offset='100%' stop-color='#90a4ae'/>
       </linearGradient>
     </defs>
-    <!-- Торс -->
     <circle cx='64' cy='64' r='28' fill='url(#torso1)' stroke='#6b1c14' stroke-width='4'/>
-    <!-- Голова -->
     <circle cx='64' cy='40' r='12' fill='#ffe0b2' stroke='#6b1c14' stroke-width='3'/>
     <circle cx='60' cy='38' r='2.5' fill='#263238'/><circle cx='68' cy='38' r='2.5' fill='#263238'/>
-    <!-- Ноги -->
     <rect x='52' y='88' width='10' height='18' rx='4' fill='#5d4037'/>
     <rect x='66' y='88' width='10' height='18' rx='4' fill='#5d4037'/>
-    <!-- Руки -->
     <rect x='38' y='60' width='14' height='10' rx='4' fill='#ffccbc'/>
     <rect x='76' y='60' width='14' height='10' rx='4' fill='#ffccbc'/>
-    <!-- Щит (лево) -->
     <circle cx='40' cy='64' r='16' fill='url(#shield1)' stroke='#3e2723' stroke-width='3'/>
     <circle cx='40' cy='64' r='5' fill='#3e2723' opacity='0.8'/>
-    <!-- Меч (право) -->
     <rect x='84' y='54' width='24' height='6' rx='3' fill='url(#metal1)' stroke='#263238' stroke-width='2'/>
     <rect x='82' y='51' width='6' height='12' rx='3' fill='#6d4c41'/>
   </svg>`,
-
-  // Скаут: лёгкий доспех, два коротких клинка
+  // Скаут
   runner: `<?xml version='1.0'?>
   <svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 128 128'>
     <defs>
@@ -250,23 +248,17 @@ const ENEMY_SVGS = {
         <stop offset='100%' stop-color='#b0bec5'/>
       </linearGradient>
     </defs>
-    <!-- Торс (эллипс) -->
     <ellipse cx='64' cy='64' rx='30' ry='24' fill='url(#torso2)' stroke='#0a3d24' stroke-width='4'/>
-    <!-- Голова -->
     <circle cx='64' cy='40' r='11' fill='#ffe0b2' stroke='#0a3d24' stroke-width='3'/>
     <circle cx='60' cy='39' r='2.2' fill='#0a3d24'/><circle cx='68' cy='39' r='2.2' fill='#0a3d24'/>
-    <!-- Ноги (наклонённые, будто бежит) -->
     <rect x='50' y='86' width='10' height='18' rx='4' transform='rotate(-10 55 95)' fill='#37474f'/>
     <rect x='68' y='86' width='10' height='18' rx='4' transform='rotate(12 73 95)' fill='#37474f'/>
-    <!-- Руки -->
     <rect x='36' y='60' width='14' height='8' rx='4' fill='#ffccbc'/>
     <rect x='78' y='60' width='14' height='8' rx='4' fill='#ffccbc'/>
-    <!-- Клинки (двойные) -->
     <rect x='28' y='58' width='18' height='5' rx='2.5' fill='url(#metal2)' stroke='#263238' stroke-width='2'/>
     <rect x='82' y='58' width='18' height='5' rx='2.5' fill='url(#metal2)' stroke='#263238' stroke-width='2'/>
   </svg>`,
-
-  // Танк: тяжёлый щит-прямоугольник + булава
+  // Танк
   tank: `<?xml version='1.0'?>
   <svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 128 128'>
     <defs>
@@ -283,24 +275,19 @@ const ENEMY_SVGS = {
         <stop offset='100%' stop-color='#5d4037'/>
       </linearGradient>
     </defs>
-    <!-- Торс (прямоугольник с закруглениями) -->
     <rect x='36' y='46' width='56' height='42' rx='12' fill='url(#torso3)' stroke='#3c2c63' stroke-width='4'/>
-    <!-- Голова -->
     <circle cx='64' cy='38' r='12' fill='#d7ccc8' stroke='#3c2c63' stroke-width='3'/>
     <circle cx='60' cy='36' r='2.2' fill='#3c2c63'/><circle cx='68' cy='36' r='2.2' fill='#3c2c63'/>
-    <!-- Ноги -->
     <rect x='48' y='90' width='12' height='20' rx='5' fill='#4e342e'/>
     <rect x='68' y='90' width='12' height='20' rx='5' fill='#4e342e'/>
-    <!-- Руки толстые -->
     <rect x='30' y='60' width='18' height='12' rx='6' fill='#d7ccc8'/>
     <rect x='80' y='60' width='18' height='12' rx='6' fill='#d7ccc8'/>
-    <!-- Щит (большой прямоугольник слева) -->
     <rect x='22' y='52' width='24' height='28' rx='6' fill='url(#metal3)' stroke='#263238' stroke-width='3'/>
     <circle cx='34' cy='66' r='4' fill='#263238' opacity='0.8'/>
-    <!-- Булава (справа) -->
     <rect x='94' y='57' width='6' height='22' rx='3' fill='url(#wood3)' stroke='#3e2723' stroke-width='2'/>
     <circle cx='97' cy='56' r='8' fill='url(#metal3)' stroke='#263238' stroke-width='2'/>
-    <circle cx='97' cy='56' r='2' fill='#263238'/>\n  </svg>`
+    <circle cx='97' cy='56' r='2' fill='#263238'/>
+  </svg>`
 };
 
 // ====== TOWERS ======
@@ -348,7 +335,6 @@ export default function App() {
   const [breakTime, setBreak] = useState(Math.ceil(breakRef.current));
   const [selectedType, setSelectedType] = useState(null);
   const [selectedTower, setSelectedTower] = useState(null);
-  // отдельный «тик» для безопасного форс-рендера без клонирования объектов
   const [uiTick, setUiTick] = useState(0);
 
   const radiusPreviewRef = useRef(null);
@@ -396,7 +382,6 @@ export default function App() {
         archer: PIXI.Texture.from(svgToURI(TOWER_SVGS.archer)),
         cannon: PIXI.Texture.from(svgToURI(TOWER_SVGS.cannon)),
         mage:   PIXI.Texture.from(svgToURI(TOWER_SVGS.mage)),
-        // враги
         e_grunt:  PIXI.Texture.from(svgToURI(ENEMY_SVGS.grunt)),
         e_runner: PIXI.Texture.from(svgToURI(ENEMY_SVGS.runner)),
         e_tank:   PIXI.Texture.from(svgToURI(ENEMY_SVGS.tank)),
@@ -525,7 +510,6 @@ export default function App() {
       console.error("Init error", e);
       alert("Init error: " + (e?.message || e));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // UI sync
@@ -535,7 +519,6 @@ export default function App() {
       setLives(livesRef.current);
       setWave(waveRef.current);
       setBreak(Math.max(0, Math.ceil(breakRef.current)));
-      // форсим общий ререндер, не трогая ссылку на выбранную башню
       setUiTick(t => t + 1);
     }, 100);
     return () => clearInterval(id);
@@ -545,19 +528,16 @@ export default function App() {
   function createTowerUI(x, y, conf){
     const cont = new PIXI.Container();
 
-    // Прогресс-бар подуровней
     const barBg = new PIXI.Graphics();
     const w = Math.floor(TILE_SIZE*0.9), h = 6;
     barBg.beginFill(0x222222, 0.7).drawRoundedRect(-w/2, -TILE_SIZE*0.55, w, h, 3).endFill();
 
     const barFill = new PIXI.Graphics();
 
-    // Текст уровня слева (римскими цифрами)
     const lvlText = new PIXI.Text('I', { fontSize: Math.floor(TILE_SIZE*0.35), fill: 0x111111 });
     lvlText.anchor.set(1, 0.5);
     lvlText.x = -w/2 - 6; lvlText.y = -TILE_SIZE*0.55 + h/2;
 
-    // Деления на баре
     const ticks = new PIXI.Graphics();
 
     cont.addChild(barBg, barFill, ticks, lvlText);
@@ -572,15 +552,12 @@ export default function App() {
     const need = SUBLEVELS_PER_LEVEL[Math.min(lvl-1, SUBLEVELS_PER_LEVEL.length-1)];
     const { barFill, lvlText, ticks, w, h } = tw.ui;
 
-    // текст уровня
     lvlText.text = toRoman(lvl);
 
-    // заливка по прогрессу
     const ratio = Math.min(1, sub / need);
     barFill.clear();
     barFill.beginFill(0x00c853).drawRoundedRect(-w/2+1, -TILE_SIZE*0.55+1, Math.max(0, (w-2)*ratio), h-2, 2).endFill();
 
-    // рисуем деления
     ticks.clear();
     ticks.lineStyle(1, 0xffffff, 0.65);
     for (let i=1;i<need;i++){
@@ -591,12 +568,10 @@ export default function App() {
   }
 
   function levelUp(tw){
-    // бафы на уровень
     tw.conf.range *= 1.12;
     tw.conf.damage *= 1.18;
     tw.conf.cooldownSec = Math.max(0.35, tw.conf.cooldownSec * 0.94);
 
-    // визуальный всплеск
     const flash = new PIXI.Graphics();
     flash.lineStyle(4, 0x00c853, 0.9);
     flash.drawCircle(0,0, TILE_SIZE*0.6);
@@ -615,7 +590,6 @@ export default function App() {
   function placeTower(cx, cy, typeKey) {
     const conf = { ...TOWER_TYPES[typeKey] };
 
-    // контейнер башни (тень + спрайт)
     const cont = new PIXI.Container();
     cont.x = cx * TILE_SIZE + TILE_SIZE / 2;
     cont.y = cy * TILE_SIZE + TILE_SIZE / 2;
@@ -632,10 +606,8 @@ export default function App() {
     sprite.scale.set(scale);
     cont.addChild(sprite);
 
-    // лёгкая анимация покачивания
     cont._phase = Math.random()*Math.PI*2;
 
-    // выбор по клику
     cont.eventMode = "static";
     cont.cursor = "pointer";
     cont.on("pointerdown", () => selectTowerBySprite(cont));
@@ -673,7 +645,6 @@ export default function App() {
   function selectTowerBySprite(sprite){
     const tw = towersRef.current.find(t => t.sprite === sprite);
     if (!tw) return;
-    // снять радиус с прошлого выбора
     hideSelectedRadius();
     setSelectedTower(tw);
     showSelectedRadius(tw);
@@ -691,19 +662,15 @@ export default function App() {
     let a=0.5; const app = appRef.current; const fade=(d)=>{ const dt=typeof d==='number'?d:(d?.deltaTime??1); a-=(dt/60)*2; ping.alpha=Math.max(0,a); if(a<=0){ uiLayerRef.current.removeChild(ping); ping.destroy(); app.ticker.remove(fade);} }; app.ticker.add(fade);
     if (tw.sublevel >= need && tw.level < maxLevel){ tw.level += 1; tw.sublevel = 0; levelUp(tw); }
     redrawTowerProgress(tw);
-    // всегда обновляем круг радиуса
     showSelectedRadius(tw);
-    // форсим ререндер панели без изменения ссылки
     setUiTick(t => t + 1);
   }
 
   function sellTower(tw){
-    // возврат: 50% базовой цены + 25% вложений в апгрейды
     const base = tw.conf.cost||0; const extra = Math.max(0, (tw.invested||base) - base);
     const refund = Math.round(base*0.5 + extra*0.25);
     goldRef.current += refund;
 
-    // освободить клетку
     if (typeof tw.cx === 'number' && typeof tw.cy === 'number') {
       occupiedRef.current.delete(`${tw.cx},${tw.cy}`);
     } else {
@@ -712,7 +679,6 @@ export default function App() {
       occupiedRef.current.delete(`${gx},${gy}`);
     }
 
-    // remove sprites
     if (tw.ui?.uiCont) { uiLayerRef.current.removeChild(tw.ui.uiCont); tw.ui.uiCont.destroy({children:true}); }
     if (tw.sprite?.parent) { towerLayerRef.current.removeChild(tw.sprite); tw.sprite.destroy(); }
     const idx = towersRef.current.indexOf(tw); if (idx!==-1) towersRef.current.splice(idx,1);
@@ -739,11 +705,10 @@ export default function App() {
     const speed = base.speed * et.speedMul;
 
     const cont = new PIXI.Container();
-    // лёгкая тень
     const shadow = new PIXI.Graphics();
     shadow.beginFill(0x000000, 0.18).drawEllipse(0, TILE_SIZE*0.28, TILE_SIZE*0.30, TILE_SIZE*0.12).endFill();
     cont.addChild(shadow);
-    // сам спрайт
+
     const texMap = {
       grunt: texturesRef.current.e_grunt,
       runner: texturesRef.current.e_runner,
@@ -751,13 +716,12 @@ export default function App() {
     };
     const s = new PIXI.Sprite(texMap[typeKey] || texturesRef.current.e_grunt);
     s.anchor.set(0.5);
-    s.name = 'body'; // пометим для доступа в tick
-    const target = TILE_SIZE * 0.80; // 80% клетки
-    const scale = target / 128;      // SVG 128x128
+    s.name = 'body';
+    const target = TILE_SIZE * 0.80;
+    const scale = target / 128;
     s.scale.set(scale);
     cont.addChild(s);
 
-    // HP bar (как у башен)
     const barBg = new PIXI.Graphics();
     const w = Math.floor(TILE_SIZE*0.9), h = 6;
     barBg.beginFill(0x222222, 0.7).drawRoundedRect(-w/2, -TILE_SIZE*0.55, w, h, 3).endFill();
@@ -821,13 +785,11 @@ export default function App() {
     const dtSec = dt/60;
     const enemyPath = enemyPathRef.current;
 
-    // перерыв и автозапуск
     if (!isWaveActiveRef.current && breakRef.current > 0) {
       breakRef.current = Math.max(0, breakRef.current - dtSec);
       if (breakRef.current <= 0) { breakRef.current = 0; startWave(); }
     }
 
-    // спавн волны
     if (isWaveActiveRef.current) {
       if (spawnRef.current.toSpawn > 0) {
         spawnRef.current.timerSec -= dtSec;
@@ -855,19 +817,15 @@ export default function App() {
         en.sprite.x = (ax + (bx-ax)*t)*TILE_SIZE + TILE_SIZE/2;
         en.sprite.y = (ay + (by-ay)*t)*TILE_SIZE + TILE_SIZE/2;
         en.pathIndex += en.speed * dtSec;
-         // ориентируем «тело» по направлению движения (влево — отражаем по X)
-         const body = en.sprite.getChildByName?.('body');
-         if (body) {
+
+        // флип тела по направлению движения + лёгкая качка
+        const body = en.sprite.getChildByName?.('body');
+        if (body) {
           const dirX = bx - ax;
-          const sgn = dirX < 0 ? -1 : 1;
-          const baseScale = body.scale.x < 0 ? -body.scale.x : body.scale.x; // модуль текущего
-         body.scale.x = sgn * baseScale;
-         }
-        // анимация поворота/качки только для спрайта врага, не HP-бара
-        if (typeof en._rotPhase === 'number') {
+          const base = Math.abs(body.scale.x) || (TILE_SIZE*0.80/128);
+          body.scale.x = (dirX < 0 ? -base : base);
           en._rotPhase += dtSec * 2.5;
-          const bodySprite = en.sprite.children?.find(ch => ch instanceof PIXI.Sprite);
-          if (bodySprite) bodySprite.rotation = Math.sin(en._rotPhase) * 0.08;
+          body.rotation = Math.sin(en._rotPhase) * 0.08;
         }
       } else {
         enemyLayerRef.current.removeChild(en.sprite);
@@ -879,7 +837,6 @@ export default function App() {
 
     // стрельба и анимация башен
     towersRef.current.forEach(t => {
-      // анимация башни: лёгкое «дыхание»
       if (t.sprite && typeof t.sprite._phase === 'number'){
         t.sprite._phase += dtSec * 2.0;
         const offset = Math.sin(t.sprite._phase) * 1.2;
