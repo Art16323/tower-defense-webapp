@@ -2,33 +2,34 @@ import { useEffect, useRef, useState } from "react";
 import * as PIXI from "pixi.js";
 
 const TILE_SIZE = 64;
-const GRID_SIZE = 10; // было 5 — сделал 10; можно менять под девайсы
+const GRID_SIZE = 10; // размер поля
 
-// Оставим поля для башен: путь пройдёт змейкой внутри прямоугольника с отступом от краёв
-const PATH_MARGIN = 2; // клетки по краям, где можно строить башни
-function buildSnakePath(n, margin = PATH_MARGIN) {
-  const p = [];
-  const x0 = Math.max(0, margin);
-  const y0 = Math.max(0, margin);
-  const x1 = Math.min(n - 1, n - 1 - margin);
-  const y1 = Math.min(n - 1, n - 1 - margin);
-  for (let y = y0; y <= y1; y++) {
-    if ((y - y0) % 2 === 0) {
-      for (let x = x0; x <= x1; x++) p.push([x, y]);
-    } else {
-      for (let x = x1; x >= x0; x--) p.push([x, y]);
-    }
-  }
-  return p;
+// Путь в виде "коридора" с изгибами, как на рисунке — старт слева вверху, финиш слева внизу
+function buildCustomPath() {
+  const path = [];
+  // верхний горизонтальный сегмент слева направо
+  for (let x = 0; x < GRID_SIZE - 1; x++) path.push([x, 0]);
+  // вниз справа
+  for (let y = 0; y < 3; y++) path.push([GRID_SIZE - 1, y]);
+  // второй горизонтальный сегмент справа налево
+  for (let x = GRID_SIZE - 1; x >= 1; x--) path.push([x, 3]);
+  // вниз слева от сегмента
+  for (let y = 3; y < 6; y++) path.push([0, y]);
+  // третий горизонтальный сегмент слева направо
+  for (let x = 0; x < GRID_SIZE - 1; x++) path.push([x, 6]);
+  // вниз справа до финиша
+  for (let y = 6; y < GRID_SIZE; y++) path.push([GRID_SIZE - 1, y]);
+  return path;
 }
-const enemyPath = buildSnakePath(GRID_SIZE);
+
+const enemyPath = buildCustomPath();
 const pathSet = new Set(enemyPath.map(([x, y]) => `${x},${y}`));
 
-// Генерация параметров волны по её индексу (0,1,2,...)
+// Генерация параметров волны по её индексу
 function getWaveConf(idx) {
-  const enemies = 6 + Math.floor(idx * 1.5);          // постепенно больше врагов
-  const speed   = 0.80 + Math.min(0.9, idx * 0.03);    // ускоряем, но с потолком
-  const hp      = 1 + Math.floor(idx / 2);             // раз в две волны +1 хп
+  const enemies = 6 + Math.floor(idx * 1.5);
+  const speed = 0.80 + Math.min(0.9, idx * 0.03);
+  const hp = 1 + Math.floor(idx / 2);
   return { enemies, speed, hp };
 }
 
