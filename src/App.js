@@ -18,8 +18,9 @@ function buildRandomPath(seed = Date.now(), options = {}) {
   const rnd = mulberry32(seed);
   const N = GRID_SIZE;
   const margin = 1; // отступ для башен
-  const maxVertStreak  = options.maxVertStreak  ?? 2; // НЕ больше 2 вертикальных подряд
-  const maxHorizStreak = options.maxHorizStreak ?? 4; // ограничим длинные горизонтали
+  const maxVertStreak  = options.maxVertStreak  ?? 2; // НЕ больше 2 вертикалей подряд
+  const maxHorizStreak = options.maxHorizStreak ?? 4; // ограничение горизонталей
+  const minLength      = options.minLength      ?? Math.floor(N * N * 0.55); // минимальная длина пути
 
   const path = [];
   const used = new Set();
@@ -44,11 +45,11 @@ function buildRandomPath(seed = Date.now(), options = {}) {
       // если горизонтальная серия стала слишком длинной — делаем мини-спуск на 1 клетку
       if (horizStreak >= maxHorizStreak && y < N - 1 - margin) {
         push(x, y + 1); // шаг вниз
-        y += 1;         // фиксируем новый уровень полосы
+        y += 1;
         vertStreak = Math.min(vertStreak + 1, maxVertStreak);
-        horizStreak = 0; // сбрасываем, продолжим на новой высоте
+        horizStreak = 0;
         if (vertStreak >= maxVertStreak) {
-          // принудительно сделаем боковой шаг на 1, чтобы не было >2 вертикалей подряд
+          // боковой шаг на 1, чтобы не было >2 вертикалей подряд
           const side = goRight ? -1 : 1; // смещение к центру
           const sx = x + side;
           if (sx >= margin && sx <= N - 1 - margin) push(sx, y);
@@ -58,7 +59,7 @@ function buildRandomPath(seed = Date.now(), options = {}) {
       x += xStep;
     }
 
-    // Небольшой спуск между полосами 1–2 клетки, но следим за лимитом вертикали
+    // Небольшой спуск между полосами 1–2 клетки (контроль вертикалей)
     if (y < N - 1 - margin) {
       const drop = (rnd() < 0.5 ? 1 : 2);
       const edgeX = goRight ? xEnd - xStep : xEnd - xStep; // последний валидный x
@@ -67,8 +68,7 @@ function buildRandomPath(seed = Date.now(), options = {}) {
         vertStreak++;
         if (vertStreak >= maxVertStreak && (y + k) < (N - 1 - margin)) {
           const side = (edgeX === margin) ? 1 : -1;
-          const sx = edgeX + side;
-          const sy = y + k;
+          const sx = edgeX + side; const sy = y + k;
           if (sx >= margin && sx <= N - 1 - margin) push(sx, sy);
           vertStreak = 0;
         }
@@ -79,29 +79,51 @@ function buildRandomPath(seed = Date.now(), options = {}) {
     goRight = !goRight;
   }
 
-  // Спуск к базе (x=margin, y=N-1-margin) с "лесенкой"
-  const baseX = margin;
-  const baseY = N - 1 - margin;
+  // === НЕ фиксируем базу в конкретной точке ===
+  // Дойдя до нижней части карты, если путь короче минимума — добавим бэги по низу.
   let [cx, cy] = path[path.length - 1];
-  vertStreak = 0;
-  while (cy < baseY) {
-    cy += 1; push(cx, cy); vertStreak++;
-    if (vertStreak >= maxVertStreak && cy < baseY) {
-      const dirX = baseX > cx ? 1 : (baseX < cx ? -1 : 0);
-      if (dirX !== 0) { cx += dirX; push(cx, cy); }
-      vertStreak = 0;
+  let bottomY = N - 1 - margin;
+  if (cy < bottomY) { // аккуратно спускаемся до низа «лесенкой», соблюдая лимит вертикалей
+    vertStreak = 0;
+    while (cy < bottomY) {
+      cy += 1; push(cx, cy); vertStreak++;
+      if (vertStreak >= maxVertStreak && cy < bottomY) {
+        const side = (cx > margin + 1) ? -1 : 1; // шаг в сторону от края
+        const nx = cx + side; if (nx >= margin && nx <= N - 1 - margin) { cx = nx; push(cx, cy); }
+        vertStreak = 0;
+      }
     }
   }
-  while (cx !== baseX) { const dirX = baseX > cx ? 1 : -1; cx += dirX; push(cx, baseY); }
 
-  return path;
+  // Добираем длину, двигаясь вдоль нижних рядов «змейкой» с ограничениями
+  let dir = (path.length % 2 === 0) ? 1 : -1; // направление по X
+  let horizStreak = 0; vertStreak = 0;
+  while (path.length < minLength) {
+    const nx = cx + dir;
+    if (nx >= margin && nx <= N - 1 - margin) {
+      // ещё один шаг по горизонтали
+      push(cx = nx, cy); horizStreak++; vertStreak = 0;
+      if (horizStreak >= maxHorizStreak) {
+        // разорвём горизонталь: шаг вверх-вниз «карманом», если возможно
+        if (cy - 1 >= margin) { push(cx, cy - 1); push(cx, cy); }
+        horizStreak = 0;
+      }
+    } else {
+      // упёрлись в край — переворот направления и маленький подъём-спуск, если можно
+      dir *= -1; horizStreak = 0;
+      if (cy - 1 >= margin) { push(cx, cy - 1); push(cx, cy); }
+    }
+    // защита от бесконечного цикла
+    if (path.length >= N * N - 1) break;
+  }
+
+  return path; // последняя клетка — и есть база
 }
 
 const enemyPath = buildRandomPath();
 const pathSet = new Set(enemyPath.map(([x, y]) => `${x},${y}`));
 const START = enemyPath[0];
 const BASE = enemyPath[enemyPath.length - 1];
-
 
 // Генерация параметров волны по её индексу (бесконечные волны)
 function getWaveConf(idx) {
