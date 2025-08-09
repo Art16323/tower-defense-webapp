@@ -5,6 +5,7 @@ import * as PIXI from "pixi.js";
 const TILE_SIZE = 64;
 const GRID_SIZE = 10; // поле NxN
 const MARGIN = 1;    // обочина вокруг пути для башен
+const BOTTOM_BAR_HEIGHT = 186; // фиксированная высота нижней панели
 
 // ====== UTIL ======
 function mulberry32(a) {
@@ -202,6 +203,7 @@ export default function App() {
   const [selectedTower, setSelectedTower] = useState(null);
 
   const radiusPreviewRef = useRef(null);
+  const selectedRadiusRef = useRef(null);
 
   // Зум/пан
   const isDraggingRef = useRef(false);
@@ -497,7 +499,10 @@ export default function App() {
   function selectTowerBySprite(sprite){
     const tw = towersRef.current.find(t => t.sprite === sprite);
     if (!tw) return;
+    // снять радиус с прошлого выбора
+    hideSelectedRadius();
     setSelectedTower(tw);
+    showSelectedRadius(tw);
   }
 
   function upgradeTower(tw){
@@ -512,6 +517,8 @@ export default function App() {
     let a=0.5; const app = appRef.current; const fade=(d)=>{ const dt=typeof d==='number'?d:(d?.deltaTime??1); a-=(dt/60)*2; ping.alpha=Math.max(0,a); if(a<=0){ uiLayerRef.current.removeChild(ping); ping.destroy(); app.ticker.remove(fade);} }; app.ticker.add(fade);
     if (tw.sublevel >= need && tw.level < maxLevel){ tw.level += 1; tw.sublevel = 0; levelUp(tw); }
     redrawTowerProgress(tw);
+    // если эта башня выбрана — обновим круг радиуса
+    if (selectedTower === tw) showSelectedRadius(tw);
     setSelectedTower({...tw});
   }
 
@@ -524,6 +531,7 @@ export default function App() {
     if (tw.ui?.uiCont) { uiLayerRef.current.removeChild(tw.ui.uiCont); tw.ui.uiCont.destroy({children:true}); }
     if (tw.sprite?.parent) { towerLayerRef.current.removeChild(tw.sprite); tw.sprite.destroy(); }
     const idx = towersRef.current.indexOf(tw); if (idx!==-1) towersRef.current.splice(idx,1);
+    hideSelectedRadius();
     setSelectedTower(null);
   }
 
@@ -596,6 +604,8 @@ export default function App() {
 
   function showRadiusPreview(cx, cy){ const typeKey=selectedTypeRef.current; if(!typeKey) return; hideRadiusPreview(); const conf=TOWER_TYPES[typeKey]; const g=new PIXI.Graphics(); g.lineStyle(2,0x00cc66,0.35); g.beginFill(0x00cc66,0.08); g.drawCircle(cx*TILE_SIZE+TILE_SIZE/2, cy*TILE_SIZE+TILE_SIZE/2, conf.range); g.endFill(); g.name='radiusPreview'; uiLayerRef.current.addChild(g); radiusPreviewRef.current=g; }
   function hideRadiusPreview(){ const g=radiusPreviewRef.current; if(g?.parent){ g.parent.removeChild(g); g.destroy(); } radiusPreviewRef.current=null; }
+  function showSelectedRadius(tw){ hideSelectedRadius(); if(!tw) return; const g=new PIXI.Graphics(); g.lineStyle(2,0x00cc66,0.5); g.beginFill(0x00cc66,0.08); g.drawCircle(tw.x, tw.y, tw.conf.range); g.endFill(); selectedRadiusRef.current=g; uiLayerRef.current.addChild(g); }
+  function hideSelectedRadius(){ const g=selectedRadiusRef.current; if(g?.parent){ g.parent.removeChild(g); g.destroy(); } selectedRadiusRef.current=null; }
 
   // Главный тик
   function tick(d){
@@ -681,7 +691,7 @@ export default function App() {
 
   // UI helpers
   function selectTower(typeKey){ selectedTypeRef.current = typeKey; setSelectedType(typeKey); }
-  function deselectTower(){ setSelectedTower(null); }
+  function deselectTower(){ hideSelectedRadius(); setSelectedTower(null); }
 
   const tg = typeof window !== 'undefined' ? window.Telegram?.WebApp : undefined;
   const isDark = tg?.colorScheme === 'dark';
@@ -706,28 +716,39 @@ export default function App() {
 
       <div ref={mountRef} style={{ background:'#ddd', borderRadius:8, width:'100%', maxWidth:'100vw', touchAction:'none' }} />
 
-      <div style={{ display:'flex', gap:10, flexWrap:'wrap', justifyContent:'center', marginTop:8 }}>
-        {Object.entries(TOWER_TYPES).map(([key, t]) => {
-          const disabled = gold < t.cost;
-          return (
-            <button key={key} disabled={disabled} onClick={() => selectTower(key)}
-              style={{ padding:'6px 10px', background: selectedType===key?'#d0ebff':'#fff', border:'1px solid #ccc', borderRadius:6, cursor: disabled?'not-allowed':'pointer', opacity: disabled?0.6:1 }}>
-              {t.name} ({t.cost})
-            </button>
-          );
-        })}
-        <button onClick={() => selectTower(null)}>❌ Отмена</button>
-      </div>
+      {/* отступ под фиксированную нижнюю панель */}
+      <div style={{ height: `calc(${BOTTOM_BAR_HEIGHT}px + env(safe-area-inset-bottom, 0px))` }} />
 
-      {/* Панель выбранной башни */}
-      {selectedTower && (
-        <div style={{marginTop:10, padding:'10px 12px', border:'1px solid #ccc', borderRadius:8, maxWidth:700, width:'100%', display:'flex', gap:12, alignItems:'center', background:'#fff'}}>
-          <div style={{minWidth:120}}>
+      {/* Нижняя панель: строить ИЛИ инфо о башне */}
+      {!selectedTower ? (
+        <div style={{ position:'fixed', left:0, right:0, bottom:0, zIndex:20, background:'#fff', borderTop:'1px solid #ccc', boxShadow:'0 -2px 10px rgba(0,0,0,0.12)', padding:`10px 12px calc(10px + env(safe-area-inset-bottom, 0px))`, height: BOTTOM_BAR_HEIGHT, display:'flex', flexDirection:'column', gap:8 }}>
+          <div style={{ display:'flex', gap:10, flexWrap:'wrap', justifyContent:'center' }}>
+            {Object.entries(TOWER_TYPES).map(([key, t]) => {
+              const disabled = gold < t.cost;
+              return (
+                <button key={key} disabled={disabled} onClick={() => selectTower(key)}
+                  style={{ padding:'8px 12px', background: selectedType===key?'#d0ebff':'#fff', border:'1px solid #ccc', borderRadius:8, cursor: disabled?'not-allowed':'pointer', opacity: disabled?0.6:1 }}>
+                  {t.name} ({t.cost})
+                </button>
+              );
+            })}
+            <button onClick={() => selectTower(null)} style={{ padding:'8px 12px', border:'1px solid #ccc', borderRadius:8, background:'#fff' }}>❌ Отмена</button>
+          </div>
+          <div style={{ display:'flex', justifyContent:'center' }}>
+            <button onClick={() => { hideOverlay(); breakRef.current = 0; startWave(); }} disabled={startDisabled}
+              style={{ padding:'10px 16px', fontSize:16, background: startDisabled ? '#9aa' : '#28a745', color:'#fff', border:'none', borderRadius:10, cursor: startDisabled ? 'not-allowed' : 'pointer' }}>
+              🚀 Начать волну
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ position:'fixed', left:0, right:0, bottom:0, zIndex:20, background:'#fff', borderTop:'1px solid #ccc', boxShadow:'0 -2px 10px rgba(0,0,0,0.12)', padding:`10px 12px calc(10px + env(safe-area-inset-bottom, 0px))`, height: BOTTOM_BAR_HEIGHT, display:'flex', gap:12, alignItems:'center' }}>
+          <div style={{minWidth:110}}>
             <div style={{fontWeight:700}}>{selectedTower.conf.name}</div>
             <div>Уровень: {toRoman(selectedTower.level)}</div>
           </div>
-          <div style={{display:'grid', gridTemplateColumns:'auto auto', columnGap:12, rowGap:4, flex:1}}>
-            <div>Тип урона</div><div>{selectedTower.conf.dmgType}</div>
+          <div style={{display:'grid', gridTemplateColumns:'auto auto', columnGap:12, rowGap:4, flex:1, minWidth:0}}>
+            <div>Тип урона</div><div style={{overflow:'hidden', textOverflow:'ellipsis'}}>{selectedTower.conf.dmgType}</div>
             <div>Урон</div><div>{selectedTower.conf.damage.toFixed(1)}</div>
             <div>Скорость атаки</div><div>{(1/selectedTower.conf.cooldownSec).toFixed(2)}/с</div>
             <div>Дальность</div><div>{Math.round(selectedTower.conf.range)}</div>
@@ -735,17 +756,12 @@ export default function App() {
             <div>Вложено</div><div>{selectedTower.invested}</div>
           </div>
           <div style={{display:'flex', gap:8}}>
-            <button onClick={() => upgradeTower(selectedTower)} style={{padding:'8px 12px', background:'#28a745', color:'#fff', border:'none', borderRadius:6}}>Улучшить</button>
-            <button onClick={() => sellTower(selectedTower)} style={{padding:'8px 12px', background:'#ffc107', color:'#111', border:'none', borderRadius:6}}>Продать</button>
-            <button onClick={deselectTower} style={{padding:'8px 12px', background:'#e0e0e0', color:'#111', border:'none', borderRadius:6}}>Снять выбор</button>
+            <button onClick={() => upgradeTower(selectedTower)} style={{padding:'10px 12px', background:'#28a745', color:'#fff', border:'none', borderRadius:8}}>Улучшить</button>
+            <button onClick={() => sellTower(selectedTower)} style={{padding:'10px 12px', background:'#ffc107', color:'#111', border:'none', borderRadius:8}}>Продать</button>
+            <button onClick={deselectTower} style={{padding:'10px 12px', background:'#e0e0e0', color:'#111', border:'none', borderRadius:8}}>Снять</button>
           </div>
         </div>
       )}
-
-      <button onClick={() => { hideOverlay(); breakRef.current = 0; startWave(); }} disabled={startDisabled}
-        style={{ marginTop:10, padding:'6px 14px', fontSize:16, background: startDisabled ? '#9aa' : '#28a745', color:'#fff', border:'none', borderRadius:6, cursor: startDisabled ? 'not-allowed' : 'pointer' }}>
-        🚀 Начать волну
-      </button>
     </div>
   );
 }
