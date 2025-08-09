@@ -8,33 +8,33 @@ const enemyPath = [
   [0, 0], [1, 0], [2, 0], [3, 0], [4, 0],
   [4, 1], [4, 2], [3, 2], [2, 2], [1, 2], [0, 2]
 ];
-
 const pathSet = new Set(enemyPath.map(([x, y]) => `${x},${y}`));
 
 const TOWER_TYPES = {
-  archer: { name: 'Лучник', cost: 50, range: TILE_SIZE * 2.2, cooldownMax: 45, bulletSpeed: 3, color: 0x1e90ff, damage: 1, upgradeCost: 40 },
-  cannon: { name: 'Пушка', cost: 80, range: TILE_SIZE * 2.6, cooldownMax: 70, bulletSpeed: 2.4, color: 0x5555ff, damage: 2, upgradeCost: 60 },
-  mage:   { name: 'Маг', cost: 100, range: TILE_SIZE * 3.0, cooldownMax: 55, bulletSpeed: 3.2, color: 0x7a00ff, damage: 1.5, upgradeCost: 70 },
+  archer: { name: 'Лучник', cost: 50, range: TILE_SIZE * 2, cooldownMax: 45, bulletSpeed: 3, color: 0x1e90ff, damage: 1, upgradeCost: 40 },
+  cannon: { name: 'Пушка', cost: 80, range: TILE_SIZE * 2.5, cooldownMax: 70, bulletSpeed: 2.4, color: 0x5555ff, damage: 2, upgradeCost: 60 },
+  mage:   { name: 'Маг', cost: 100, range: TILE_SIZE * 3, cooldownMax: 55, bulletSpeed: 3.2, color: 0x7a00ff, damage: 1.5, upgradeCost: 70 },
 };
 
 const WAVES = [
   { enemies: 5, speed: 0.02, hp: 1 },
   { enemies: 8, speed: 0.025, hp: 2 },
-  { enemies: 12, speed: 0.03, hp: 3 },
-  { enemies: 15, speed: 0.035, hp: 4 }
+  { enemies: 12, speed: 0.03, hp: 3 }
 ];
 
 function App() {
   const canvasRef = useRef(null);
   const selectedTypeRef = useRef(null);
-  const [selectedType, setSelectedType] = useState(null);
+  const towersRef = useRef([]);
+  const enemiesRef = useRef([]);
+  const bulletsRef = useRef([]);
+  const spawnDataRef = useRef({ active: false, timer: 0, toSpawn: 0 });
 
+  const [selectedType, setSelectedType] = useState(null);
   const [gold, setGold] = useState(150);
   const [lives, setLives] = useState(5);
   const [wave, setWave] = useState(0);
-  const [waveTime, setWaveTime] = useState(0);
   const [breakTime, setBreakTime] = useState(0);
-  const [isWaveActive, setIsWaveActive] = useState(false);
 
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
@@ -50,9 +50,6 @@ function App() {
     canvasRef.current?.appendChild(app.view);
 
     const occupied = new Set();
-    const towers = [];
-    const enemies = [];
-    const bullets = [];
 
     // Сетка
     for (let y = 0; y < GRID_SIZE; y++) {
@@ -89,71 +86,51 @@ function App() {
       tower.endFill();
       tower.x = cx * TILE_SIZE + TILE_SIZE / 2;
       tower.y = cy * TILE_SIZE + TILE_SIZE / 2;
-      tower.interactive = true;
-      tower.cursor = 'pointer';
-      tower.on('pointerdown', () => upgradeTower(towerData));
       app.stage.addChild(tower);
 
       const towerData = { x: tower.x, y: tower.y, conf, cooldown: 0, sprite: tower };
-      towers.push(towerData);
+      towersRef.current.push(towerData);
       occupied.add(`${cx},${cy}`);
       setGold(g => g - conf.cost);
     }
 
-    function upgradeTower(tower) {
-      if (gold < tower.conf.upgradeCost) return;
-      tower.conf.range *= 1.3;
-      tower.conf.damage *= 1.5;
-      tower.conf.cooldownMax *= 0.9;
-      setGold(g => g - tower.conf.upgradeCost);
-    }
-
-    let spawnTimer = 0;
-    let enemiesToSpawn = 0;
-
     function startWave() {
-      if (isWaveActive) return;
-      const nextWaveIndex = wave;
-      if (nextWaveIndex >= WAVES.length) return;
-      setWaveTime(0);
-      setIsWaveActive(true);
+      if (spawnDataRef.current.active) return;
+      if (wave >= WAVES.length) return;
+      const waveConf = WAVES[wave];
+      spawnDataRef.current = { active: true, timer: 60, toSpawn: waveConf.enemies };
       setWave(w => w + 1);
-      enemiesToSpawn = WAVES[nextWaveIndex].enemies;
-      spawnTimer = 60;
     }
+
+    window.addEventListener('startWave', startWave);
 
     app.ticker.add(() => {
-      // Если волна активна — спавним врагов
-      if (isWaveActive) {
-        setWaveTime(t => t + 1 / 60);
-        if (enemiesToSpawn > 0 && spawnTimer <= 0) {
+      const enemies = enemiesRef.current;
+      const bullets = bulletsRef.current;
+      const towers = towersRef.current;
+      const spawnData = spawnDataRef.current;
+
+      // Спавн врагов
+      if (spawnData.active) {
+        if (spawnData.toSpawn > 0 && spawnData.timer <= 0) {
           const waveConf = WAVES[wave - 1];
           const e = new PIXI.Graphics();
           e.beginFill(0xff3b30);
           e.drawCircle(0, 0, TILE_SIZE / 4);
           e.endFill();
           app.stage.addChild(e);
-          enemies.push({
-            sprite: e,
-            pathIndex: 0,
-            speed: waveConf.speed,
-            hp: waveConf.hp
-          });
-          enemiesToSpawn--;
-          spawnTimer = 50;
+          enemies.push({ sprite: e, pathIndex: 0, speed: waveConf.speed, hp: waveConf.hp });
+          spawnData.toSpawn--;
+          spawnData.timer = 50;
         } else {
-          spawnTimer--;
+          spawnData.timer--;
         }
-        // Если врагов нет и нечего спавнить — конец волны
-        if (enemies.length === 0 && enemiesToSpawn === 0) {
-          setIsWaveActive(false);
+        if (enemies.length === 0 && spawnData.toSpawn === 0) {
+          spawnData.active = false;
           setBreakTime(10);
         }
       } else {
-        // Перерыв
-        if (breakTime > 0) {
-          setBreakTime(t => t - 1 / 60);
-        }
+        if (breakTime > 0) setBreakTime(t => Math.max(0, t - 1 / 60));
       }
 
       // Движение врагов
@@ -168,12 +145,9 @@ function App() {
           app.stage.removeChild(enemy.sprite);
           enemies.splice(i, 1);
           setLives(l => {
-            const newLives = l - 1;
-            if (newLives <= 0) {
-              alert('Game Over!');
-              app.stop();
-            }
-            return newLives;
+            const nl = l - 1;
+            if (nl <= 0) app.stop();
+            return nl;
           });
         }
       }
@@ -237,33 +211,28 @@ function App() {
       }
     });
 
-    return () => app.destroy(true, true);
-  }, [gold, lives, wave, isWaveActive, breakTime]);
+    return () => {
+      app.destroy(true, true);
+      window.removeEventListener('startWave', startWave);
+    };
+  }, [gold, lives, wave, breakTime]);
 
   function selectTower(typeKey) {
     selectedTypeRef.current = typeKey;
     setSelectedType(typeKey);
   }
 
-  function fmtTime(sec) {
-    const s = Math.max(0, Math.floor(sec));
-    return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-      {/* Инфопанель */}
       <div style={{ display: 'flex', gap: 20, fontSize: 16 }}>
         <div>💰 {gold}</div>
         <div>❤️ {lives}</div>
         <div>🌊 Волна: {wave}</div>
-        {isWaveActive ? <div>⏳ {fmtTime(waveTime)}</div> : <div>☕ Перерыв: {fmtTime(breakTime)}</div>}
+        <div>☕ Перерыв: {Math.ceil(breakTime)}</div>
       </div>
 
-      {/* Поле */}
       <div ref={canvasRef} style={{ background: '#ddd', borderRadius: 8 }} />
 
-      {/* Кнопки башен */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', marginTop: 8 }}>
         {Object.entries(TOWER_TYPES).map(([key, t]) => (
           <button
@@ -283,12 +252,8 @@ function App() {
         <button onClick={() => selectTower(null)}>❌ Отмена</button>
       </div>
 
-      {/* Кнопка старта волны */}
       <button
-        onClick={() => {
-          const ev = new Event('startWave');
-          window.dispatchEvent(ev);
-        }}
+        onClick={() => window.dispatchEvent(new Event('startWave'))}
         style={{
           marginTop: 10,
           padding: '6px 14px',
