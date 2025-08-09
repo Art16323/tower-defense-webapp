@@ -156,16 +156,11 @@ function pickEnemyType(idx) {
   return 'tank';
 }
 
-function heartsText(hp) {
-  if (hp <= 5) return '❤'.repeat(Math.max(1, hp));
-  return `❤×${hp}`;
-}
-
 // ====== TOWERS ======
 const TOWER_TYPES = {
-  archer: { name: "Лучник", cost: 50, range: TILE_SIZE * 2.2, cooldownSec: 0.75, bulletSpeed: 220, color: 0x1e90ff, damage: 1, upgradeCost: 40 },
-  cannon: { name: "Пушка",  cost: 80, range: TILE_SIZE * 2.6, cooldownSec: 1.20, bulletSpeed: 180, color: 0xffa500, damage: 2, upgradeCost: 60 },
-  mage:   { name: "Маг",    cost: 100,range: TILE_SIZE * 3.0, cooldownSec: 0.90, bulletSpeed: 240, color: 0x7a00ff, damage: 1.5, upgradeCost: 70 },
+  archer: { name: "Лучник", cost: 50, range: TILE_SIZE * 2.2, cooldownSec: 0.75, bulletSpeed: 220, color: 0x1e90ff, damage: 1, upgradeCost: 40, dmgType: 'physical' },
+  cannon: { name: "Пушка",  cost: 80, range: TILE_SIZE * 2.6, cooldownSec: 1.20, bulletSpeed: 180, color: 0xffa500, damage: 2, upgradeCost: 60, dmgType: 'explosive' },
+  mage:   { name: "Маг",    cost: 100,range: TILE_SIZE * 3.0, cooldownSec: 0.90, bulletSpeed: 240, color: 0x7a00ff, damage: 1.5, upgradeCost: 70, dmgType: 'arcane' },
 };
 
 // Прогресс апгрейдов: 10 уровней с подуровнями
@@ -177,6 +172,7 @@ export default function App() {
 
   // PIXI и слои
   const appRef = useRef(null);
+  const cameraRef = useRef(null);
   const gridLayerRef   = useRef(null);
   const towerLayerRef  = useRef(null);
   const enemyLayerRef  = useRef(null);
@@ -203,8 +199,14 @@ export default function App() {
   const [wave, setWave]       = useState(waveRef.current);
   const [breakTime, setBreak] = useState(Math.ceil(breakRef.current));
   const [selectedType, setSelectedType] = useState(null);
+  const [selectedTower, setSelectedTower] = useState(null);
 
   const radiusPreviewRef = useRef(null);
+
+  // Зум/пан
+  const isDraggingRef = useRef(false);
+  const lastPosRef = useRef({x:0,y:0});
+  const scaleRef = useRef(1);
 
   // Путь
   const enemyPathRef = useRef([]);
@@ -238,6 +240,11 @@ export default function App() {
       appRef.current = app;
       mountRef.current?.appendChild(app.view);
 
+      // Камера (контейнер мира)
+      const camera = new PIXI.Container();
+      cameraRef.current = camera;
+      app.stage.addChild(camera);
+
       function fit() {
         const baseW = TILE_SIZE * GRID_SIZE;
         const baseH = TILE_SIZE * GRID_SIZE;
@@ -245,7 +252,9 @@ export default function App() {
         const maxH = Math.min(window.innerHeight, tg?.viewportHeight ?? Infinity);
         const scale = Math.min(maxW / baseW, maxH / baseH, 1);
         app.renderer.resize(Math.ceil(baseW * scale), Math.ceil(baseH * scale));
-        app.stage.scale.set(scale);
+        scaleRef.current = scale;
+        camera.scale.set(scale);
+        camera.position.set(0,0);
       }
       fit();
       window.addEventListener("resize", fit);
@@ -261,7 +270,7 @@ export default function App() {
       enemyLayerRef.current  = enemyLayer;
       bulletLayerRef.current = bulletLayer;
       uiLayerRef.current     = uiLayer;
-      app.stage.addChild(gridLayer, towerLayer, enemyLayer, bulletLayer, uiLayer);
+      camera.addChild(gridLayer, towerLayer, enemyLayer, bulletLayer, uiLayer);
 
       // Сетка
       const START = STARTRef.current;
@@ -306,6 +315,42 @@ export default function App() {
       baseIcon.y = BASE[1] * TILE_SIZE + TILE_SIZE / 2;
       uiLayer.addChild(baseIcon);
 
+      // Зум колесом
+      app.view.addEventListener('wheel', (e)=>{
+        e.preventDefault();
+        const cam = cameraRef.current; if(!cam) return;
+        const old = scaleRef.current;
+        const zoom = e.deltaY < 0 ? 1.1 : 0.9;
+        let next = old * zoom;
+        const min=0.4, max=3.0;
+        next = Math.max(min, Math.min(max, next));
+        if (next === old) return;
+        // зум к курсору
+        const rect = app.view.getBoundingClientRect();
+        const mx = (e.clientX - rect.left);
+        const my = (e.clientY - rect.top);
+        const wx = (mx - cam.position.x) / old;
+        const wy = (my - cam.position.y) / old;
+        cam.position.set(mx - wx*next, my - wy*next);
+        cam.scale.set(next);
+        scaleRef.current = next;
+      }, { passive:false });
+
+      // Панорамирование перетаскиванием
+      app.view.addEventListener('pointerdown', (e)=>{
+        isDraggingRef.current = true; lastPosRef.current = { x: e.clientX, y: e.clientY };
+      });
+      window.addEventListener('pointerup', ()=>{ isDraggingRef.current=false; });
+      window.addEventListener('pointermove', (e)=>{
+        if (!isDraggingRef.current) return;
+        const cam = cameraRef.current; if(!cam) return;
+        const dx = e.clientX - lastPosRef.current.x;
+        const dy = e.clientY - lastPosRef.current.y;
+        cam.position.x += dx;
+        cam.position.y += dy;
+        lastPosRef.current = { x: e.clientX, y: e.clientY };
+      });
+
       app.ticker.add(tick);
 
       return () => {
@@ -328,6 +373,7 @@ export default function App() {
       setLives(livesRef.current);
       setWave(waveRef.current);
       setBreak(Math.max(0, Math.ceil(breakRef.current)));
+      setSelectedTower(t => (t ? {...t} : t)); // обновляем панель выбора
     }, 100);
     return () => clearInterval(id);
   }, []);
@@ -415,10 +461,10 @@ export default function App() {
     sprite.x = cx * TILE_SIZE + TILE_SIZE / 2;
     sprite.y = cy * TILE_SIZE + TILE_SIZE / 2;
 
-    // апгрейд по клику (подуровень)
+    // выбор по клику
     sprite.eventMode = "static";
     sprite.cursor = "pointer";
-    sprite.on("pointerdown", () => upgradeTowerByClick(sprite));
+    sprite.on("pointerdown", () => selectTowerBySprite(sprite));
 
     towerLayerRef.current.addChild(sprite);
 
@@ -433,6 +479,7 @@ export default function App() {
       ui,
       level: 1,
       sublevel: 0,
+      invested: conf.cost,
     };
     towersRef.current.push(tower);
     redrawTowerProgress(tower);
@@ -444,30 +491,40 @@ export default function App() {
   function upgradeTowerByClick(sprite) {
     const tw = towersRef.current.find(t => t.sprite === sprite);
     if (!tw) return;
+    upgradeTower(tw);
+  }
 
-    const cost = tw.conf.upgradeCost ?? 50;
-    if (goldRef.current < cost) return;
+  function selectTowerBySprite(sprite){
+    const tw = towersRef.current.find(t => t.sprite === sprite);
+    if (!tw) return;
+    setSelectedTower(tw);
+  }
 
-    goldRef.current -= cost;
-
-    // добавляем подуровень, уровни = 1..10
+  function upgradeTower(tw){
+    const cost = tw.conf.upgradeCost ?? 50; if (goldRef.current < cost) return;
+    goldRef.current -= cost; tw.invested += cost;
     const maxLevel = 10;
     const need = SUBLEVELS_PER_LEVEL[Math.min(tw.level-1, SUBLEVELS_PER_LEVEL.length-1)];
     tw.sublevel += 1;
-
-    // короткая вспышка на каждый подуровень
     const ping = new PIXI.Graphics();
     ping.beginFill(0xffffff, 0.5).drawCircle(0,0,TILE_SIZE/3).endFill();
     ping.x = tw.x; ping.y = tw.y; uiLayerRef.current.addChild(ping);
     let a=0.5; const app = appRef.current; const fade=(d)=>{ const dt=typeof d==='number'?d:(d?.deltaTime??1); a-=(dt/60)*2; ping.alpha=Math.max(0,a); if(a<=0){ uiLayerRef.current.removeChild(ping); ping.destroy(); app.ticker.remove(fade);} }; app.ticker.add(fade);
-
-    if (tw.sublevel >= need && tw.level < maxLevel){
-      tw.level += 1;
-      tw.sublevel = 0;
-      levelUp(tw);
-    }
-
+    if (tw.sublevel >= need && tw.level < maxLevel){ tw.level += 1; tw.sublevel = 0; levelUp(tw); }
     redrawTowerProgress(tw);
+    setSelectedTower({...tw});
+  }
+
+  function sellTower(tw){
+    // возврат: 50% базовой цены + 25% вложений в апгрейды
+    const base = tw.conf.cost||0; const extra = Math.max(0, (tw.invested||base) - base);
+    const refund = Math.round(base*0.5 + extra*0.25);
+    goldRef.current += refund;
+    // remove sprites
+    if (tw.ui?.uiCont) { uiLayerRef.current.removeChild(tw.ui.uiCont); tw.ui.uiCont.destroy({children:true}); }
+    if (tw.sprite?.parent) { towerLayerRef.current.removeChild(tw.sprite); tw.sprite.destroy(); }
+    const idx = towersRef.current.indexOf(tw); if (idx!==-1) towersRef.current.splice(idx,1);
+    setSelectedTower(null);
   }
 
   function startWave() {
@@ -494,14 +551,31 @@ export default function App() {
     body.beginFill(et.color); body.drawCircle(0, 0, TILE_SIZE / 4); body.endFill();
     cont.addChild(body);
 
-    const hpLabel = new PIXI.Text(heartsText(hpMax), { fontSize: Math.floor(TILE_SIZE * 0.28) });
-    hpLabel.anchor.set(0.5);
-    hpLabel.y = -TILE_SIZE * 0.45;
-    cont.addChild(hpLabel);
+    // HP bar (как у башен)
+    const barBg = new PIXI.Graphics();
+    const w = Math.floor(TILE_SIZE*0.9), h = 6;
+    barBg.beginFill(0x222222, 0.7).drawRoundedRect(-w/2, -TILE_SIZE*0.55, w, h, 3).endFill();
+    const barFill = new PIXI.Graphics();
+    const ticks = new PIXI.Graphics();
+    ticks.lineStyle(1, 0xffffff, 0.65);
+    const segs = Math.max(1, Math.min(20, hpMax));
+    for (let i=1;i<segs;i++){
+      const x = -w/2 + (w*i/segs);
+      ticks.moveTo(x, -TILE_SIZE*0.55);
+      ticks.lineTo(x, -TILE_SIZE*0.55 + h);
+    }
+    cont.addChild(barBg, barFill, ticks);
+
+    const updateHp = (hp)=>{
+      const ratio = Math.max(0, Math.min(1, hp / hpMax));
+      barFill.clear();
+      barFill.beginFill(0xff4d4f).drawRoundedRect(-w/2+1, -TILE_SIZE*0.55+1, Math.max(0,(w-2)*ratio), h-2, 2).endFill();
+    };
+    updateHp(hpMax);
 
     enemyLayerRef.current.addChild(cont);
 
-    enemiesRef.current.push({ sprite: cont, body, hpLabel, typeKey, pathIndex: 0, speed, hp: hpMax, hpMax });
+    enemiesRef.current.push({ sprite: cont, body, typeKey, pathIndex: 0, speed, hp: hpMax, hpMax, updateHp });
   }
 
   function fireBullet(tower, target) {
@@ -593,7 +667,7 @@ export default function App() {
         bulletLayerRef.current.removeChild(b.sprite); b.sprite.destroy(); bulletsRef.current.splice(i,1);
         b.target.hp -= b.damage;
         if (b.target.hp > 0) {
-          if (b.target.hpLabel) b.target.hpLabel.text = heartsText(b.target.hp);
+          if (b.target.updateHp) b.target.updateHp(b.target.hp);
         } else {
           enemyLayerRef.current.removeChild(b.target.sprite);
           b.target.sprite.destroy();
@@ -607,6 +681,7 @@ export default function App() {
 
   // UI helpers
   function selectTower(typeKey){ selectedTypeRef.current = typeKey; setSelectedType(typeKey); }
+  function deselectTower(){ setSelectedTower(null); }
 
   const tg = typeof window !== 'undefined' ? window.Telegram?.WebApp : undefined;
   const isDark = tg?.colorScheme === 'dark';
@@ -629,7 +704,7 @@ export default function App() {
         {isWaveActiveRef.current ? <div>⏳ Волна идёт</div> : <div>☕ Перерыв: {breakTime}s</div>}
       </div>
 
-      <div ref={mountRef} style={{ background:'#ddd', borderRadius:8, width:'100%', maxWidth:'100vw' }} />
+      <div ref={mountRef} style={{ background:'#ddd', borderRadius:8, width:'100%', maxWidth:'100vw', touchAction:'none' }} />
 
       <div style={{ display:'flex', gap:10, flexWrap:'wrap', justifyContent:'center', marginTop:8 }}>
         {Object.entries(TOWER_TYPES).map(([key, t]) => {
@@ -643,6 +718,29 @@ export default function App() {
         })}
         <button onClick={() => selectTower(null)}>❌ Отмена</button>
       </div>
+
+      {/* Панель выбранной башни */}
+      {selectedTower && (
+        <div style={{marginTop:10, padding:'10px 12px', border:'1px solid #ccc', borderRadius:8, maxWidth:700, width:'100%', display:'flex', gap:12, alignItems:'center', background:'#fff'}}>
+          <div style={{minWidth:120}}>
+            <div style={{fontWeight:700}}>{selectedTower.conf.name}</div>
+            <div>Уровень: {toRoman(selectedTower.level)}</div>
+          </div>
+          <div style={{display:'grid', gridTemplateColumns:'auto auto', columnGap:12, rowGap:4, flex:1}}>
+            <div>Тип урона</div><div>{selectedTower.conf.dmgType}</div>
+            <div>Урон</div><div>{selectedTower.conf.damage.toFixed(1)}</div>
+            <div>Скорость атаки</div><div>{(1/selectedTower.conf.cooldownSec).toFixed(2)}/с</div>
+            <div>Дальность</div><div>{Math.round(selectedTower.conf.range)}</div>
+            <div>Подуровень</div><div>{selectedTower.sublevel}/{SUBLEVELS_PER_LEVEL[Math.min(selectedTower.level-1, SUBLEVELS_PER_LEVEL.length-1)]}</div>
+            <div>Вложено</div><div>{selectedTower.invested}</div>
+          </div>
+          <div style={{display:'flex', gap:8}}>
+            <button onClick={() => upgradeTower(selectedTower)} style={{padding:'8px 12px', background:'#28a745', color:'#fff', border:'none', borderRadius:6}}>Улучшить</button>
+            <button onClick={() => sellTower(selectedTower)} style={{padding:'8px 12px', background:'#ffc107', color:'#111', border:'none', borderRadius:6}}>Продать</button>
+            <button onClick={deselectTower} style={{padding:'8px 12px', background:'#e0e0e0', color:'#111', border:'none', borderRadius:6}}>Снять выбор</button>
+          </div>
+        </div>
+      )}
 
       <button onClick={() => { hideOverlay(); breakRef.current = 0; startWave(); }} disabled={startDisabled}
         style={{ marginTop:10, padding:'6px 14px', fontSize:16, background: startDisabled ? '#9aa' : '#28a745', color:'#fff', border:'none', borderRadius:6, cursor: startDisabled ? 'not-allowed' : 'pointer' }}>
