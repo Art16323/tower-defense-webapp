@@ -199,6 +199,43 @@ const TOWER_SVGS = {
 };
 function svgToURI(svg){ return 'data:image/svg+xml;base64,' + btoa(svg); }
 
+// ====== SPRITE ENEMIES (SVG) ======
+const ENEMY_SVGS = {
+  grunt: `<?xml version='1.0'?><svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 128 128'>
+    <defs>
+      <linearGradient id='eg1' x1='0' x2='0' y1='0' y2='1'>
+        <stop offset='0%' stop-color='#ff8a80'/>
+        <stop offset='100%' stop-color='#ff3b30'/>
+      </linearGradient>
+    </defs>
+    <circle cx='64' cy='64' r='30' fill='url(#eg1)' stroke='#6b1c14' stroke-width='4'/>
+    <circle cx='54' cy='56' r='5' fill='#fff'/><circle cx='74' cy='56' r='5' fill='#fff'/>
+    <rect x='46' y='72' width='36' height='8' rx='4' fill='#6b1c14' opacity='0.8'/>
+  </svg>`,
+  runner: `<?xml version='1.0'?><svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 128 128'>
+    <defs>
+      <linearGradient id='eg2' x1='0' x2='1' y1='0' y2='1'>
+        <stop offset='0%' stop-color='#a7ffeb'/>
+        <stop offset='100%' stop-color='#00c853'/>
+      </linearGradient>
+    </defs>
+    <ellipse cx='64' cy='64' rx='34' ry='26' fill='url(#eg2)' stroke='#0a3d24' stroke-width='4'/>
+    <path d='M44 68 Q64 56 84 68' fill='none' stroke='#0a3d24' stroke-width='4' stroke-linecap='round'/>
+    <circle cx='56' cy='58' r='4' fill='#0a3d24'/><circle cx='72' cy='58' r='4' fill='#0a3d24'/>
+  </svg>`,
+  tank: `<?xml version='1.0'?><svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 128 128'>
+    <defs>
+      <linearGradient id='eg3' x1='0' x2='0' y1='0' y2='1'>
+        <stop offset='0%' stop-color='#d1c4e9'/>
+        <stop offset='100%' stop-color='#7e57c2'/>
+      </linearGradient>
+    </defs>
+    <rect x='34' y='40' width='60' height='48' rx='12' fill='url(#eg3)' stroke='#3c2c63' stroke-width='4'/>
+    <rect x='52' y='32' width='24' height='12' rx='6' fill='#3c2c63'/>
+    <circle cx='54' cy='64' r='6' fill='#3c2c63'/><circle cx='74' cy='64' r='6' fill='#3c2c63'/>
+  </svg>`
+};
+
 // ====== TOWERS ======
 const TOWER_TYPES = {
   archer: { name: "Лучник", cost: 50, range: TILE_SIZE * 2.2, cooldownSec: 0.75, bulletSpeed: 220, color: 0x1e90ff, damage: 1, upgradeCost: 40, dmgType: 'physical' },
@@ -287,11 +324,15 @@ export default function App() {
       appRef.current = app;
       mountRef.current?.appendChild(app.view);
 
-      // подготовим текстуры башен
+      // подготовим текстуры башен и врагов
       texturesRef.current = {
         archer: PIXI.Texture.from(svgToURI(TOWER_SVGS.archer)),
         cannon: PIXI.Texture.from(svgToURI(TOWER_SVGS.cannon)),
         mage:   PIXI.Texture.from(svgToURI(TOWER_SVGS.mage)),
+        // враги
+        e_grunt:  PIXI.Texture.from(svgToURI(ENEMY_SVGS.grunt)),
+        e_runner: PIXI.Texture.from(svgToURI(ENEMY_SVGS.runner)),
+        e_tank:   PIXI.Texture.from(svgToURI(ENEMY_SVGS.tank)),
       };
 
       // Камера (контейнер мира)
@@ -537,10 +578,8 @@ export default function App() {
     const ui = createTowerUI(cont.x, cont.y, conf);
 
     const tower = {
-      // пиксельные координаты центра
       x: cont.x,
       y: cont.y,
-      // добавляем координаты клетки (для освобождения при продаже)
       cx,
       cy,
       conf,
@@ -569,7 +608,6 @@ export default function App() {
     if (!tw) return;
     // снять радиус с прошлого выбора
     hideSelectedRadius();
-    // держим ссылку на оригинальный объект башни (без клонирования)
     setSelectedTower(tw);
     showSelectedRadius(tw);
   }
@@ -602,7 +640,6 @@ export default function App() {
     if (typeof tw.cx === 'number' && typeof tw.cy === 'number') {
       occupiedRef.current.delete(`${tw.cx},${tw.cy}`);
     } else {
-      // fallback на всякий случай
       const gx = Math.round((tw.x - TILE_SIZE/2)/TILE_SIZE);
       const gy = Math.round((tw.y - TILE_SIZE/2)/TILE_SIZE);
       occupiedRef.current.delete(`${gx},${gy}`);
@@ -635,10 +672,22 @@ export default function App() {
     const speed = base.speed * et.speedMul;
 
     const cont = new PIXI.Container();
-
-    const body = new PIXI.Graphics();
-    body.beginFill(et.color); body.drawCircle(0, 0, TILE_SIZE / 4); body.endFill();
-    cont.addChild(body);
+    // лёгкая тень
+    const shadow = new PIXI.Graphics();
+    shadow.beginFill(0x000000, 0.18).drawEllipse(0, TILE_SIZE*0.28, TILE_SIZE*0.30, TILE_SIZE*0.12).endFill();
+    cont.addChild(shadow);
+    // сам спрайт
+    const texMap = {
+      grunt: texturesRef.current.e_grunt,
+      runner: texturesRef.current.e_runner,
+      tank: texturesRef.current.e_tank,
+    };
+    const s = new PIXI.Sprite(texMap[typeKey] || texturesRef.current.e_grunt);
+    s.anchor.set(0.5);
+    const target = TILE_SIZE * 0.80; // 80% клетки
+    const scale = target / 128;      // SVG 128x128
+    s.scale.set(scale);
+    cont.addChild(s);
 
     // HP bar (как у башен)
     const barBg = new PIXI.Graphics();
@@ -664,7 +713,16 @@ export default function App() {
 
     enemyLayerRef.current.addChild(cont);
 
-    enemiesRef.current.push({ sprite: cont, body, typeKey, pathIndex: 0, speed, hp: hpMax, hpMax, updateHp });
+    enemiesRef.current.push({
+      sprite: cont,
+      typeKey,
+      pathIndex: 0,
+      speed,
+      hp: hpMax,
+      hpMax,
+      updateHp,
+      _rotPhase: Math.random() * Math.PI * 2,
+    });
   }
 
   function fireBullet(tower, target) {
@@ -729,6 +787,12 @@ export default function App() {
         en.sprite.x = (ax + (bx-ax)*t)*TILE_SIZE + TILE_SIZE/2;
         en.sprite.y = (ay + (by-ay)*t)*TILE_SIZE + TILE_SIZE/2;
         en.pathIndex += en.speed * dtSec;
+        // анимация поворота/качки только для спрайта врага, не HP-бара
+        if (typeof en._rotPhase === 'number') {
+          en._rotPhase += dtSec * 2.5;
+          const bodySprite = en.sprite.children?.find(ch => ch instanceof PIXI.Sprite);
+          if (bodySprite) bodySprite.rotation = Math.sin(en._rotPhase) * 0.08;
+        }
       } else {
         enemyLayerRef.current.removeChild(en.sprite);
         en.sprite.destroy(); enemiesRef.current.splice(i,1);
