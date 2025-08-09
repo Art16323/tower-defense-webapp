@@ -4,25 +4,62 @@ import * as PIXI from "pixi.js";
 const TILE_SIZE = 64;
 const GRID_SIZE = 10; // размер поля
 
-// Путь в виде "коридора" с изгибами, как на рисунке — старт слева вверху, финиш слева внизу
-function buildCustomPath() {
+// Генератор случайного пути с сохранением логики (старт на одном краю, финиш внизу слева)
+function mulberry32(a) {
+  return function() {
+    let t = a += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+}
+
+function buildRandomPath(seed = Date.now()) {
+  const rnd = mulberry32(seed);
+  const N = GRID_SIZE;
+  const margin = 1; // отступ для башен
   const path = [];
-  // верхний горизонтальный сегмент слева направо
-  for (let x = 0; x < GRID_SIZE - 1; x++) path.push([x, 0]);
-  // вниз справа
-  for (let y = 0; y < 3; y++) path.push([GRID_SIZE - 1, y]);
-  // второй горизонтальный сегмент справа налево
-  for (let x = GRID_SIZE - 1; x >= 1; x--) path.push([x, 3]);
-  // вниз слева от сегмента
-  for (let y = 3; y < 6; y++) path.push([0, y]);
-  // третий горизонтальный сегмент слева направо
-  for (let x = 0; x < GRID_SIZE - 1; x++) path.push([x, 6]);
-  // вниз справа до финиша
-  for (let y = 6; y < GRID_SIZE; y++) path.push([GRID_SIZE - 1, y]);
+  const used = new Set();
+  const push = (x, y) => { const k = `${x},${y}`; if (!used.has(k)) { used.add(k); path.push([x, y]); } };
+
+  // старт сверху слева
+  let x = margin, y = margin;
+  push(x, y);
+  let goRight = true;
+
+  while (y < N - 1 - margin) {
+    const xStart = goRight ? margin : N - 1 - margin;
+    const xEnd = goRight ? N - 1 - margin : margin;
+    const xStep = goRight ? 1 : -1;
+    for (let xx = xStart; goRight ? xx <= xEnd : xx >= xEnd; xx += xStep) {
+      push(xx, y);
+    }
+    if (y < N - 1 - margin) {
+      const drop = rnd() < 0.5 ? 1 : 2;
+      for (let k = 1; k <= drop && y + k <= N - 1 - margin; k++) {
+        push(xEnd, y + k);
+      }
+      y += drop;
+    }
+    goRight = !goRight;
+  }
+
+  // спуск к базе (x=margin, y=N-1-margin)
+  const baseX = margin;
+  const baseY = N - 1 - margin;
+  const [cx, cy] = path[path.length - 1];
+  if (cy < baseY) {
+    for (let yy = cy + 1; yy <= baseY; yy++) push(cx, yy);
+  }
+  if (cx !== baseX) {
+    const step = baseX > cx ? 1 : -1;
+    for (let xx = cx; xx !== baseX; xx += step) push(xx + step, baseY);
+  }
+
   return path;
 }
 
-const enemyPath = buildCustomPath();
+const enemyPath = buildRandomPath();
 const pathSet = new Set(enemyPath.map(([x, y]) => `${x},${y}`));
 
 // Генерация параметров волны по её индексу
