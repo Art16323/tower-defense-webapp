@@ -4,7 +4,6 @@ import * as PIXI from "pixi.js";
 const TILE_SIZE = 64;
 const GRID_SIZE = 10; // размер поля
 
-// === СЛУЧАЙНЫЙ ПУТЬ: старт сверху слева, финиш (база) внизу слева, коридор с отступом ===
 function mulberry32(a) {
   return function() {
     let t = a += 0x6D2B79F5;
@@ -14,10 +13,13 @@ function mulberry32(a) {
   }
 }
 
-function buildRandomPath(seed = Date.now()) {
+// Генерация пути с ограничением на максимум 2 вертикальные клетки подряд
+function buildRandomPath(seed = Date.now(), options = {}) {
   const rnd = mulberry32(seed);
   const N = GRID_SIZE;
   const margin = 1; // отступ для башен
+  const maxVertStreak = options.maxVertStreak ?? 2; // НЕ больше 2 вертикальных подряд
+
   const path = [];
   const used = new Set();
   const push = (x, y) => { const k = `${x},${y}`; if (!used.has(k)) { used.add(k); path.push([x, y]); } };
@@ -26,36 +28,74 @@ function buildRandomPath(seed = Date.now()) {
   let x = margin, y = margin;
   push(x, y);
   let goRight = true;
+  let vertStreak = 0;
 
   while (y < N - 1 - margin) {
+    // Горизонтальная полоса — сбрасываем вертикальную серию
+    vertStreak = 0;
     const xStart = goRight ? margin : N - 1 - margin;
     const xEnd = goRight ? N - 1 - margin : margin;
     const xStep = goRight ? 1 : -1;
-    for (let xx = xStart; goRight ? xx <= xEnd : xx >= xEnd; xx += xStep) push(xx, y);
+    for (let xx = xStart; goRight ? xx <= xEnd : xx >= xEnd; xx += xStep) {
+      push(xx, y);
+    }
+
+    // Вертикальный спуск (1–2 клетки), но не допускаем более 2 подряд
     if (y < N - 1 - margin) {
       const drop = (rnd() < 0.5 ? 1 : 2);
-      for (let k = 1; k <= drop && y + k <= N - 1 - margin; k++) push(xEnd, y + k);
+      const edgeX = xEnd; // стоим на краю полосы
+      for (let k = 1; k <= drop && y + k <= N - 1 - margin; k++) {
+        // шаг вниз
+        push(edgeX, y + k);
+        vertStreak++;
+        // если превысили лимит — делаем боковой «зиг» на 1 клетку и сбрасываем серию
+        if (vertStreak >= maxVertStreak && (y + k) < (N - 1 - margin)) {
+          const side = (edgeX === margin) ? 1 : -1; // шаг от края к центру
+          const sx = edgeX + side;
+          const sy = y + k;
+          if (sx >= margin && sx <= N - 1 - margin) {
+            push(sx, sy);
+            vertStreak = 0;
+          }
+        }
+      }
       y += drop;
     }
     goRight = !goRight;
   }
 
-  // финиш у базы (левый нижний угол внутри отступа)
+  // Спуск к базе (x=margin, y=N-1-margin) с "лесенкой": не более 2 вертикальных подряд
   const baseX = margin;
   const baseY = N - 1 - margin;
-  const [cx, cy] = path[path.length - 1];
-  if (cy < baseY) for (let yy = cy + 1; yy <= baseY; yy++) push(cx, yy);
-  if (cx !== baseX) {
-    const step = baseX > cx ? 1 : -1;
-    for (let xx = cx; xx !== baseX; xx += step) push(xx + step, baseY);
+  let cx = path[path.length - 1][0];
+  let cy = path[path.length - 1][1];
+  vertStreak = 0;
+  while (cy < baseY) {
+    // шаг вниз
+    cy += 1; push(cx, cy); vertStreak++;
+    if (vertStreak >= maxVertStreak && cy < baseY) {
+      // боковой шаг в сторону базы по X (на 1 клетку)
+      const dirX = baseX > cx ? 1 : (baseX < cx ? -1 : 0);
+      if (dirX !== 0) {
+        const nx = cx + dirX;
+        if (nx >= margin && nx <= N - 1 - margin) { cx = nx; push(cx, cy); }
+      }
+      vertStreak = 0;
+    }
   }
+  // добежать по X до базы
+  while (cx !== baseX) {
+    const dirX = baseX > cx ? 1 : -1;
+    cx += dirX; push(cx, baseY);
+  }
+
   return path;
 }
 
 const enemyPath = buildRandomPath();
 const pathSet = new Set(enemyPath.map(([x, y]) => `${x},${y}`));
 const START = enemyPath[0];
-const BASE  = enemyPath[enemyPath.length - 1];
+const BASE = enemyPath[enemyPath.length - 1];
 
 // Генерация параметров волны по её индексу (бесконечные волны)
 function getWaveConf(idx) {
