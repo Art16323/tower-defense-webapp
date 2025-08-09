@@ -13,7 +13,7 @@ function mulberry32(a) {
   }
 }
 
-// Генерация пути с ограничениями, чтобы сохранялись позиции для башен
+// Генерация пути с ограничениями, минимальной длиной и динамической базой
 function buildRandomPath(seed = Date.now(), options = {}) {
   const rnd = mulberry32(seed);
   const N = GRID_SIZE;
@@ -42,7 +42,7 @@ function buildRandomPath(seed = Date.now(), options = {}) {
     while (goRight ? x <= xEnd : x >= xEnd) {
       push(x, y);
       horizStreak++;
-      // если горизонтальная серия стала слишком длинной — делаем мини-спуск на 1 клетку
+      // если горизонтальная серия стала слишком длинной — мини-спуск на 1 клетку
       if (horizStreak >= maxHorizStreak && y < N - 1 - margin) {
         push(x, y + 1); // шаг вниз
         y += 1;
@@ -79,53 +79,48 @@ function buildRandomPath(seed = Date.now(), options = {}) {
     goRight = !goRight;
   }
 
-  // === НЕ фиксируем базу в конкретной точке ===
-  // Дойдя до нижней части карты, если путь короче минимума — добавим бэги по низу.
+  // Не фиксируем базу — последняя клетка будет базой. При необходимости добираем длину.
   let [cx, cy] = path[path.length - 1];
   let bottomY = N - 1 - margin;
-  if (cy < bottomY) { // аккуратно спускаемся до низа «лесенкой», соблюдая лимит вертикалей
+  if (cy < bottomY) {
     vertStreak = 0;
     while (cy < bottomY) {
       cy += 1; push(cx, cy); vertStreak++;
       if (vertStreak >= maxVertStreak && cy < bottomY) {
-        const side = (cx > margin + 1) ? -1 : 1; // шаг в сторону от края
+        const side = (cx > margin + 1) ? -1 : 1;
         const nx = cx + side; if (nx >= margin && nx <= N - 1 - margin) { cx = nx; push(cx, cy); }
         vertStreak = 0;
       }
     }
   }
 
-  // Добираем длину, двигаясь вдоль нижних рядов «змейкой» с ограничениями
-  let dir = (path.length % 2 === 0) ? 1 : -1; // направление по X
+  // Добираем длину, двигаясь по низу змейкой с ограничениями
+  let dir = (path.length % 2 === 0) ? 1 : -1;
   let horizStreak = 0; vertStreak = 0;
   while (path.length < minLength) {
     const nx = cx + dir;
     if (nx >= margin && nx <= N - 1 - margin) {
-      // ещё один шаг по горизонтали
       push(cx = nx, cy); horizStreak++; vertStreak = 0;
       if (horizStreak >= maxHorizStreak) {
-        // разорвём горизонталь: шаг вверх-вниз «карманом», если возможно
         if (cy - 1 >= margin) { push(cx, cy - 1); push(cx, cy); }
         horizStreak = 0;
       }
     } else {
-      // упёрлись в край — переворот направления и маленький подъём-спуск, если можно
       dir *= -1; horizStreak = 0;
       if (cy - 1 >= margin) { push(cx, cy - 1); push(cx, cy); }
     }
-    // защита от бесконечного цикла
     if (path.length >= N * N - 1) break;
   }
 
-  return path; // последняя клетка — и есть база
+  return path; // последняя клетка — база
 }
 
 const enemyPath = buildRandomPath();
 const pathSet = new Set(enemyPath.map(([x, y]) => `${x},${y}`));
 const START = enemyPath[0];
-const BASE = enemyPath[enemyPath.length - 1];
+const BASE = enemyPath[enemyPath.length - 1]; // база в конце пути
 
-// Генерация параметров волны по её индексу (бесконечные волны)
+// Бесконечные волны
 function getWaveConf(idx) {
   const enemies = 6 + Math.floor(idx * 1.5);
   const speed   = 0.80 + Math.min(0.9, idx * 0.03);
@@ -259,7 +254,13 @@ export default function App() {
       }
     }
 
-    // Иконка базы (🏰) поверх клетки базы
+    // Иконки старта и базы
+    const startIcon = new PIXI.Text('🚩', { fontSize: Math.floor(TILE_SIZE * 0.8) });
+    startIcon.anchor.set(0.5);
+    startIcon.x = START[0] * TILE_SIZE + TILE_SIZE / 2;
+    startIcon.y = START[1] * TILE_SIZE + TILE_SIZE / 2;
+    uiLayer.addChild(startIcon);
+
     const baseIcon = new PIXI.Text('🏰', { fontSize: Math.floor(TILE_SIZE * 0.8) });
     baseIcon.anchor.set(0.5);
     baseIcon.x = BASE[0] * TILE_SIZE + TILE_SIZE / 2;
