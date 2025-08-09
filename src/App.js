@@ -201,39 +201,106 @@ function svgToURI(svg){ return 'data:image/svg+xml;base64,' + btoa(svg); }
 
 // ====== SPRITE ENEMIES (SVG) ======
 const ENEMY_SVGS = {
-  grunt: `<?xml version='1.0'?><svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 128 128'>
+ // Базовый пехотинец: круглый щит + короткий меч
+  grunt: `<?xml version='1.0'?>
+  <svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 128 128'>
     <defs>
-      <linearGradient id='eg1' x1='0' x2='0' y1='0' y2='1'>
-        <stop offset='0%' stop-color='#ff8a80'/>
+      <linearGradient id='torso1' x1='0' x2='0' y1='0' y2='1'>
+       <stop offset='0%' stop-color='#ff9e80'/>
         <stop offset='100%' stop-color='#ff3b30'/>
       </linearGradient>
+      <linearGradient id='shield1' x1='0' x2='1' y1='0' y2='1'>
+        <stop offset='0%' stop-color='#8d6e63'/>
+        <stop offset='100%' stop-color='#5d4037'/>
+      </linearGradient>
+      <linearGradient id='metal1' x1='0' x2='0' y1='0' y2='1'>
+        <stop offset='0%' stop-color='#eceff1'/>
+        <stop offset='100%' stop-color='#90a4ae'/>
+      </linearGradient>
     </defs>
-    <circle cx='64' cy='64' r='30' fill='url(#eg1)' stroke='#6b1c14' stroke-width='4'/>
-    <circle cx='54' cy='56' r='5' fill='#fff'/><circle cx='74' cy='56' r='5' fill='#fff'/>
-    <rect x='46' y='72' width='36' height='8' rx='4' fill='#6b1c14' opacity='0.8'/>
+    <!-- Торс -->
+    <circle cx='64' cy='64' r='28' fill='url(#torso1)' stroke='#6b1c14' stroke-width='4'/>
+    <!-- Голова -->
+    <circle cx='64' cy='40' r='12' fill='#ffe0b2' stroke='#6b1c14' stroke-width='3'/>
+    <circle cx='60' cy='38' r='2.5' fill='#263238'/><circle cx='68' cy='38' r='2.5' fill='#263238'/>
+    <!-- Ноги -->
+    <rect x='52' y='88' width='10' height='18' rx='4' fill='#5d4037'/>
+    <rect x='66' y='88' width='10' height='18' rx='4' fill='#5d4037'/>
+    <!-- Руки -->
+    <rect x='38' y='60' width='14' height='10' rx='4' fill='#ffccbc'/>
+    <rect x='76' y='60' width='14' height='10' rx='4' fill='#ffccbc'/>
+    <!-- Щит (лево) -->
+    <circle cx='40' cy='64' r='16' fill='url(#shield1)' stroke='#3e2723' stroke-width='3'/>
+    <circle cx='40' cy='64' r='5' fill='#3e2723' opacity='0.8'/>
+    <!-- Меч (право) -->
+    <rect x='84' y='54' width='24' height='6' rx='3' fill='url(#metal1)' stroke='#263238' stroke-width='2'/>
+    <rect x='82' y='51' width='6' height='12' rx='3' fill='#6d4c41'/>
   </svg>`,
-  runner: `<?xml version='1.0'?><svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 128 128'>
+
+  // Скаут: лёгкий доспех, два коротких клинка
+  runner: `<?xml version='1.0'?>
+  <svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 128 128'>
     <defs>
-      <linearGradient id='eg2' x1='0' x2='1' y1='0' y2='1'>
+      <linearGradient id='torso2' x1='0' x2='1' y1='0' y2='1'>
         <stop offset='0%' stop-color='#a7ffeb'/>
         <stop offset='100%' stop-color='#00c853'/>
       </linearGradient>
+      <linearGradient id='metal2' x1='0' x2='0' y1='0' y2='1'>
+        <stop offset='0%' stop-color='#fafafa'/>
+        <stop offset='100%' stop-color='#b0bec5'/>
+      </linearGradient>
     </defs>
-    <ellipse cx='64' cy='64' rx='34' ry='26' fill='url(#eg2)' stroke='#0a3d24' stroke-width='4'/>
-    <path d='M44 68 Q64 56 84 68' fill='none' stroke='#0a3d24' stroke-width='4' stroke-linecap='round'/>
-    <circle cx='56' cy='58' r='4' fill='#0a3d24'/><circle cx='72' cy='58' r='4' fill='#0a3d24'/>
+    <!-- Торс (эллипс) -->
+    <ellipse cx='64' cy='64' rx='30' ry='24' fill='url(#torso2)' stroke='#0a3d24' stroke-width='4'/>
+    <!-- Голова -->
+    <circle cx='64' cy='40' r='11' fill='#ffe0b2' stroke='#0a3d24' stroke-width='3'/>
+    <circle cx='60' cy='39' r='2.2' fill='#0a3d24'/><circle cx='68' cy='39' r='2.2' fill='#0a3d24'/>
+    <!-- Ноги (наклонённые, будто бежит) -->
+    <rect x='50' y='86' width='10' height='18' rx='4' transform='rotate(-10 55 95)' fill='#37474f'/>
+    <rect x='68' y='86' width='10' height='18' rx='4' transform='rotate(12 73 95)' fill='#37474f'/>
+    <!-- Руки -->
+    <rect x='36' y='60' width='14' height='8' rx='4' fill='#ffccbc'/>
+    <rect x='78' y='60' width='14' height='8' rx='4' fill='#ffccbc'/>
+    <!-- Клинки (двойные) -->
+    <rect x='28' y='58' width='18' height='5' rx='2.5' fill='url(#metal2)' stroke='#263238' stroke-width='2'/>
+    <rect x='82' y='58' width='18' height='5' rx='2.5' fill='url(#metal2)' stroke='#263238' stroke-width='2'/>
   </svg>`,
-  tank: `<?xml version='1.0'?><svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 128 128'>
+
+  // Танк: тяжёлый щит-прямоугольник + булава
+  tank: `<?xml version='1.0'?>
+  <svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 128 128'>
     <defs>
-      <linearGradient id='eg3' x1='0' x2='0' y1='0' y2='1'>
+      <linearGradient id='torso3' x1='0' x2='0' y1='0' y2='1'>
         <stop offset='0%' stop-color='#d1c4e9'/>
         <stop offset='100%' stop-color='#7e57c2'/>
       </linearGradient>
+      <linearGradient id='metal3' x1='0' x2='0' y1='0' y2='1'>
+        <stop offset='0%' stop-color='#eceff1'/>
+        <stop offset='100%' stop-color='#90a4ae'/>
+      </linearGradient>
+      <linearGradient id='wood3' x1='0' x2='0' y1='0' y2='1'>
+        <stop offset='0%' stop-color='#8d6e63'/>
+        <stop offset='100%' stop-color='#5d4037'/>
+      </linearGradient>
     </defs>
-    <rect x='34' y='40' width='60' height='48' rx='12' fill='url(#eg3)' stroke='#3c2c63' stroke-width='4'/>
-    <rect x='52' y='32' width='24' height='12' rx='6' fill='#3c2c63'/>
-    <circle cx='54' cy='64' r='6' fill='#3c2c63'/><circle cx='74' cy='64' r='6' fill='#3c2c63'/>
-  </svg>`
+    <!-- Торс (прямоугольник с закруглениями) -->
+    <rect x='36' y='46' width='56' height='42' rx='12' fill='url(#torso3)' stroke='#3c2c63' stroke-width='4'/>
+    <!-- Голова -->
+    <circle cx='64' cy='38' r='12' fill='#d7ccc8' stroke='#3c2c63' stroke-width='3'/>
+    <circle cx='60' cy='36' r='2.2' fill='#3c2c63'/><circle cx='68' cy='36' r='2.2' fill='#3c2c63'/>
+    <!-- Ноги -->
+    <rect x='48' y='90' width='12' height='20' rx='5' fill='#4e342e'/>
+    <rect x='68' y='90' width='12' height='20' rx='5' fill='#4e342e'/>
+    <!-- Руки толстые -->
+    <rect x='30' y='60' width='18' height='12' rx='6' fill='#d7ccc8'/>
+    <rect x='80' y='60' width='18' height='12' rx='6' fill='#d7ccc8'/>
+    <!-- Щит (большой прямоугольник слева) -->
+    <rect x='22' y='52' width='24' height='28' rx='6' fill='url(#metal3)' stroke='#263238' stroke-width='3'/>
+    <circle cx='34' cy='66' r='4' fill='#263238' opacity='0.8'/>
+    <!-- Булава (справа) -->
+    <rect x='94' y='57' width='6' height='22' rx='3' fill='url(#wood3)' stroke='#3e2723' stroke-width='2'/>
+    <circle cx='97' cy='56' r='8' fill='url(#metal3)' stroke='#263238' stroke-width='2'/>
+    <circle cx='97' cy='56' r='2' fill='#263238'/>\n  </svg>`
 };
 
 // ====== TOWERS ======
@@ -684,6 +751,7 @@ export default function App() {
     };
     const s = new PIXI.Sprite(texMap[typeKey] || texturesRef.current.e_grunt);
     s.anchor.set(0.5);
+    s.name = 'body'; // пометим для доступа в tick
     const target = TILE_SIZE * 0.80; // 80% клетки
     const scale = target / 128;      // SVG 128x128
     s.scale.set(scale);
@@ -787,6 +855,14 @@ export default function App() {
         en.sprite.x = (ax + (bx-ax)*t)*TILE_SIZE + TILE_SIZE/2;
         en.sprite.y = (ay + (by-ay)*t)*TILE_SIZE + TILE_SIZE/2;
         en.pathIndex += en.speed * dtSec;
+         // ориентируем «тело» по направлению движения (влево — отражаем по X)
+         const body = en.sprite.getChildByName?.('body');
+         if (body) {
+          const dirX = bx - ax;
+          const sgn = dirX < 0 ? -1 : 1;
+          const baseScale = body.scale.x < 0 ? -body.scale.x : body.scale.x; // модуль текущего
+         body.scale.x = sgn * baseScale;
+         }
         // анимация поворота/качки только для спрайта врага, не HP-бара
         if (typeof en._rotPhase === 'number') {
           en._rotPhase += dtSec * 2.5;
