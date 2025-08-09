@@ -132,6 +132,26 @@ function getWaveConf(idx) {
   return { enemies, speed, hp };
 }
 
+// ====== ENEMIES ======
+const ENEMY_TYPES = {
+  grunt:  { name: 'Гоблин',  color: 0xff3b30, speedMul: 1.0, hpMul: 1.0 },   // базовый
+  runner: { name: 'Скаут',   color: 0x00c853, speedMul: 1.4, hpMul: 0.8 },   // быстрый, хрупкий
+  tank:   { name: 'Танк',    color: 0x7e57c2, speedMul: 0.7, hpMul: 3.0 },   // медленный, толстый
+};
+
+function getEnemyTypeForWave(idx) {
+  if (idx < 2) return 'grunt';
+  const r = Math.random();
+  if (r < 0.55) return 'grunt';
+  if (r < 0.85) return 'runner';
+  return 'tank';
+}
+
+function heartsText(hp) {
+  if (hp <= 5) return '❤'.repeat(Math.max(1, hp));
+  return `❤×${hp}`;
+}
+
 // ====== TOWERS ======
 const TOWER_TYPES = {
   archer: { name: "Лучник", cost: 50, range: TILE_SIZE * 2.2, cooldownSec: 0.75, bulletSpeed: 220, color: 0x1e90ff, damage: 1, upgradeCost: 40 },
@@ -344,12 +364,42 @@ export default function App() {
     waveRef.current += 1;
   }
 
+  function getEnemyTypeForWave(idx) {
+    if (idx < 2) return 'grunt';
+    const r = Math.random();
+    if (r < 0.55) return 'grunt';
+    if (r < 0.85) return 'runner';
+    return 'tank';
+  }
+
+  function heartsText(hp) {
+    if (hp <= 5) return '❤'.repeat(Math.max(1, hp));
+    return `❤×${hp}`;
+  }
+
   function spawnEnemy() {
-    const conf = getWaveConf(Math.max(0, waveRef.current - 1));
-    const sprite = new PIXI.Graphics();
-    sprite.beginFill(0xff3b30); sprite.drawCircle(0,0,TILE_SIZE/4); sprite.endFill();
-    enemyLayerRef.current.addChild(sprite);
-    enemiesRef.current.push({ sprite, pathIndex: 0, speed: conf.speed, hp: conf.hp });
+    const idx = Math.max(0, waveRef.current - 1);
+    const base = getWaveConf(idx);
+    const typeKey = getEnemyTypeForWave(idx);
+    const et = ENEMY_TYPES[typeKey] ?? ENEMY_TYPES.grunt;
+
+    const hpMax = Math.max(1, Math.round(base.hp * et.hpMul));
+    const speed = base.speed * et.speedMul;
+
+    const cont = new PIXI.Container();
+
+    const body = new PIXI.Graphics();
+    body.beginFill(et.color); body.drawCircle(0, 0, TILE_SIZE / 4); body.endFill();
+    cont.addChild(body);
+
+    const hpLabel = new PIXI.Text(heartsText(hpMax), { fontSize: Math.floor(TILE_SIZE * 0.28) });
+    hpLabel.anchor.set(0.5);
+    hpLabel.y = -TILE_SIZE * 0.45;
+    cont.addChild(hpLabel);
+
+    enemyLayerRef.current.addChild(cont);
+
+    enemiesRef.current.push({ sprite: cont, body, hpLabel, typeKey, pathIndex: 0, speed, hp: hpMax, hpMax });
   }
 
   function fireBullet(tower, target) {
@@ -440,7 +490,15 @@ export default function App() {
       if (Math.hypot(dx,dy) < 10) {
         bulletLayerRef.current.removeChild(b.sprite); b.sprite.destroy(); bulletsRef.current.splice(i,1);
         b.target.hp -= b.damage;
-        if (b.target.hp <= 0) { enemyLayerRef.current.removeChild(b.target.sprite); b.target.sprite.destroy(); const idx=enemiesRef.current.indexOf(b.target); if(idx!==-1) enemiesRef.current.splice(idx,1); goldRef.current += 10; }
+        if (b.target.hp > 0) {
+          if (b.target.hpLabel) b.target.hpLabel.text = heartsText(b.target.hp);
+        } else {
+          enemyLayerRef.current.removeChild(b.target.sprite);
+          b.target.sprite.destroy();
+          const idx2 = enemiesRef.current.indexOf(b.target);
+          if (idx2 !== -1) enemiesRef.current.splice(idx2, 1);
+          goldRef.current += 10;
+        }
       }
     }
   }
