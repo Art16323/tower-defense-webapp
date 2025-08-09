@@ -157,6 +157,48 @@ function pickEnemyType(idx) {
   return 'tank';
 }
 
+// ====== SPRITE TOWERS (drawn) ======
+const TOWER_SVGS = {
+  archer: `<?xml version='1.0'?><svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 128 128'>
+    <defs>
+      <linearGradient id='g1' x1='0' x2='0' y1='0' y2='1'>
+        <stop offset='0%' stop-color='#9ac1ff'/>
+        <stop offset='100%' stop-color='#467bff'/>
+      </linearGradient>
+    </defs>
+    <rect x='24' y='80' width='80' height='20' rx='10' fill='#5b6d7a' opacity='0.25'/>
+    <circle cx='64' cy='64' r='30' fill='url(#g1)' stroke='#0c2a66' stroke-width='4'/>
+    <rect x='58' y='28' width='12' height='20' rx='3' fill='#0c2a66'/>
+    <circle cx='64' cy='54' r='6' fill='#ffe082' stroke='#0c2a66' stroke-width='3'/>
+    <path d='M92 70c-10 12-36 12-56 0' fill='none' stroke='#0c2a66' stroke-width='4' stroke-linecap='round'/>
+  </svg>`,
+  cannon: `<?xml version='1.0'?><svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 128 128'>
+    <defs>
+      <linearGradient id='g2' x1='0' x2='0' y1='0' y2='1'>
+        <stop offset='0%' stop-color='#ffd08a'/>
+        <stop offset='100%' stop-color='#ff8a00'/>
+      </linearGradient>
+    </defs>
+    <rect x='22' y='82' width='84' height='20' rx='10' fill='#5b6d7a' opacity='0.25'/>
+    <circle cx='64' cy='64' r='30' fill='url(#g2)' stroke='#7a3b00' stroke-width='4'/>
+    <rect x='64' y='40' width='28' height='10' rx='5' fill='#7a3b00'/>
+    <circle cx='64' cy='64' r='10' fill='#3e1d00'/>
+  </svg>`,
+  mage: `<?xml version='1.0'?><svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 128 128'>
+    <defs>
+      <radialGradient id='g3' cx='0.5' cy='0.4' r='0.7'>
+        <stop offset='0%' stop-color='#cfa8ff'/>
+        <stop offset='100%' stop-color='#7a00ff'/>
+      </radialGradient>
+    </defs>
+    <rect x='24' y='82' width='80' height='20' rx='10' fill='#5b6d7a' opacity='0.25'/>
+    <circle cx='64' cy='64' r='30' fill='url(#g3)' stroke='#2b0052' stroke-width='4'/>
+    <path d='M52 44l24 0l-12 22z' fill='#fff' opacity='0.8'/>
+    <circle cx='64' cy='52' r='6' fill='#fff'/>
+  </svg>`
+};
+function svgToURI(svg){ return 'data:image/svg+xml;base64,' + btoa(svg); }
+
 // ====== TOWERS ======
 const TOWER_TYPES = {
   archer: { name: "Лучник", cost: 50, range: TILE_SIZE * 2.2, cooldownSec: 0.75, bulletSpeed: 220, color: 0x1e90ff, damage: 1, upgradeCost: 40, dmgType: 'physical' },
@@ -179,6 +221,7 @@ export default function App() {
   const enemyLayerRef  = useRef(null);
   const bulletLayerRef = useRef(null);
   const uiLayerRef     = useRef(null);
+  const texturesRef    = useRef({});
 
   // Состояние (refs)
   const goldRef  = useRef(150);
@@ -241,6 +284,13 @@ export default function App() {
       });
       appRef.current = app;
       mountRef.current?.appendChild(app.view);
+
+      // подготовим текстуры башен
+      texturesRef.current = {
+        archer: PIXI.Texture.from(svgToURI(TOWER_SVGS.archer)),
+        cannon: PIXI.Texture.from(svgToURI(TOWER_SVGS.cannon)),
+        mage:   PIXI.Texture.from(svgToURI(TOWER_SVGS.mage)),
+      };
 
       // Камера (контейнер мира)
       const camera = new PIXI.Container();
@@ -454,30 +504,41 @@ export default function App() {
   function placeTower(cx, cy, typeKey) {
     const conf = { ...TOWER_TYPES[typeKey] };
 
-    // тело башни
-    const sprite = new PIXI.Graphics();
-    sprite.lineStyle(2, 0x000000);
-    sprite.beginFill(conf.color);
-    sprite.drawCircle(0, 0, TILE_SIZE / 3);
-    sprite.endFill();
-    sprite.x = cx * TILE_SIZE + TILE_SIZE / 2;
-    sprite.y = cy * TILE_SIZE + TILE_SIZE / 2;
+    // контейнер башни (тень + спрайт)
+    const cont = new PIXI.Container();
+    cont.x = cx * TILE_SIZE + TILE_SIZE / 2;
+    cont.y = cy * TILE_SIZE + TILE_SIZE / 2;
+
+    const shadow = new PIXI.Graphics();
+    shadow.beginFill(0x000000, 0.18).drawEllipse(0, TILE_SIZE*0.28, TILE_SIZE*0.32, TILE_SIZE*0.14).endFill();
+    cont.addChild(shadow);
+
+    const tex = texturesRef.current[typeKey] || PIXI.Texture.WHITE;
+    const sprite = new PIXI.Sprite(tex);
+    sprite.anchor.set(0.5);
+    const targetSize = TILE_SIZE * 0.86;
+    const scale = targetSize / 128; // SVG 128x128
+    sprite.scale.set(scale);
+    cont.addChild(sprite);
+
+    // лёгкая анимация покачивания
+    cont._phase = Math.random()*Math.PI*2;
 
     // выбор по клику
-    sprite.eventMode = "static";
-    sprite.cursor = "pointer";
-    sprite.on("pointerdown", () => selectTowerBySprite(sprite));
+    cont.eventMode = "static";
+    cont.cursor = "pointer";
+    cont.on("pointerdown", () => selectTowerBySprite(cont));
 
-    towerLayerRef.current.addChild(sprite);
+    towerLayerRef.current.addChild(cont);
 
-    const ui = createTowerUI(sprite.x, sprite.y, conf);
+    const ui = createTowerUI(cont.x, cont.y, conf);
 
     const tower = {
-      x: sprite.x,
-      y: sprite.y,
+      x: cont.x,
+      y: cont.y,
       conf,
       cooldownLeft: 0,
-      sprite,
+      sprite: cont,
       ui,
       level: 1,
       sublevel: 0,
@@ -656,8 +717,15 @@ export default function App() {
       }
     }
 
-    // стрельба башен
+    // стрельба и анимация башен
     towersRef.current.forEach(t => {
+      // анимация башни: лёгкое «дыхание»
+      if (t.sprite && typeof t.sprite._phase === 'number'){
+        t.sprite._phase += dtSec * 2.0;
+        const offset = Math.sin(t.sprite._phase) * 1.2;
+        t.sprite.y = t.y + offset;
+      }
+
       if (t.cooldownLeft > 0) { t.cooldownLeft = Math.max(0, t.cooldownLeft - dtSec); return; }
       let target=null, best=Infinity;
       enemiesRef.current.forEach(en => { if(!en.sprite?.parent) return; const dx=en.sprite.x - t.x; const dy=en.sprite.y - t.y; const d=Math.hypot(dx,dy); if(d<=t.conf.range && d<best){ best=d; target=en; } });
