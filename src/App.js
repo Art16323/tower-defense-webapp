@@ -4,14 +4,19 @@ import * as PIXI from "pixi.js";
 const TILE_SIZE = 64;
 const GRID_SIZE = 10; // было 5 — сделал 10; можно менять под девайсы
 
-// Длинный путь змейкой по всему полю
-function buildSnakePath(n) {
+// Оставим поля для башен: путь пройдёт змейкой внутри прямоугольника с отступом от краёв
+const PATH_MARGIN = 2; // клетки по краям, где можно строить башни
+function buildSnakePath(n, margin = PATH_MARGIN) {
   const p = [];
-  for (let y = 0; y < n; y++) {
-    if (y % 2 === 0) {
-      for (let x = 0; x < n; x++) p.push([x, y]);
+  const x0 = Math.max(0, margin);
+  const y0 = Math.max(0, margin);
+  const x1 = Math.min(n - 1, n - 1 - margin);
+  const y1 = Math.min(n - 1, n - 1 - margin);
+  for (let y = y0; y <= y1; y++) {
+    if ((y - y0) % 2 === 0) {
+      for (let x = x0; x <= x1; x++) p.push([x, y]);
     } else {
-      for (let x = n - 1; x >= 0; x--) p.push([x, y]);
+      for (let x = x1; x >= x0; x--) p.push([x, y]);
     }
   }
   return p;
