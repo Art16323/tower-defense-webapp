@@ -16,6 +16,15 @@ function mulberry32(a) {
   };
 }
 
+function toRoman(num){
+  const map = [
+    [1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']
+  ];
+  let n=num, out='';
+  for (const [v,s] of map){ while(n>=v){ out+=s; n-=v; } }
+  return out || 'I';
+}
+
 // Генерация пути: старт сверху-слева (внутри отступа), база = последняя клетка;
 // ограничения: не более 2 вертикалей подряд, горизонтали ограничены (<=4),
 // минимальная длина ~50% всех клеток.
@@ -139,7 +148,7 @@ const ENEMY_TYPES = {
   tank:   { name: 'Танк',    color: 0x7e57c2, speedMul: 0.7, hpMul: 3.0 },   // медленный, толстый
 };
 
-function getEnemyTypeForWave(idx) {
+function pickEnemyType(idx) {
   if (idx < 2) return 'grunt';
   const r = Math.random();
   if (r < 0.55) return 'grunt';
@@ -158,6 +167,9 @@ const TOWER_TYPES = {
   cannon: { name: "Пушка",  cost: 80, range: TILE_SIZE * 2.6, cooldownSec: 1.20, bulletSpeed: 180, color: 0xffa500, damage: 2, upgradeCost: 60 },
   mage:   { name: "Маг",    cost: 100,range: TILE_SIZE * 3.0, cooldownSec: 0.90, bulletSpeed: 240, color: 0x7a00ff, damage: 1.5, upgradeCost: 70 },
 };
+
+// Прогресс апгрейдов: 10 уровней с подуровнями
+const SUBLEVELS_PER_LEVEL = [3,5,8,11,13,15,17,19,22,25];
 
 export default function App() {
   // DOM
@@ -321,8 +333,80 @@ export default function App() {
   }, []);
 
   // ====== GAME FUNCS ======
+  function createTowerUI(x, y, conf){
+    const cont = new PIXI.Container();
+
+    // Прогресс-бар подуровней
+    const barBg = new PIXI.Graphics();
+    const w = Math.floor(TILE_SIZE*0.9), h = 6;
+    barBg.beginFill(0x222222, 0.7).drawRoundedRect(-w/2, -TILE_SIZE*0.55, w, h, 3).endFill();
+
+    const barFill = new PIXI.Graphics();
+
+    // Текст уровня слева (римскими цифрами)
+    const lvlText = new PIXI.Text('I', { fontSize: Math.floor(TILE_SIZE*0.35), fill: 0x111111 });
+    lvlText.anchor.set(1, 0.5);
+    lvlText.x = -w/2 - 6; lvlText.y = -TILE_SIZE*0.55 + h/2;
+
+    // Деления на баре
+    const ticks = new PIXI.Graphics();
+
+    cont.addChild(barBg, barFill, ticks, lvlText);
+    cont.x = x; cont.y = y;
+    uiLayerRef.current.addChild(cont);
+
+    return { uiCont: cont, barBg, barFill, lvlText, ticks, w, h };
+  }
+
+  function redrawTowerProgress(tw){
+    const lvl = tw.level; const sub = tw.sublevel;
+    const need = SUBLEVELS_PER_LEVEL[Math.min(lvl-1, SUBLEVELS_PER_LEVEL.length-1)];
+    const { barFill, lvlText, ticks, w, h } = tw.ui;
+
+    // текст уровня
+    lvlText.text = toRoman(lvl);
+
+    // заливка по прогрессу
+    const ratio = Math.min(1, sub / need);
+    barFill.clear();
+    barFill.beginFill(0x00c853).drawRoundedRect(-w/2+1, -TILE_SIZE*0.55+1, Math.max(0, (w-2)*ratio), h-2, 2).endFill();
+
+    // рисуем деления
+    ticks.clear();
+    ticks.lineStyle(1, 0xffffff, 0.65);
+    for (let i=1;i<need;i++){
+      const x = -w/2 + (w*i/need);
+      ticks.moveTo(x, -TILE_SIZE*0.55);
+      ticks.lineTo(x, -TILE_SIZE*0.55 + h);
+    }
+  }
+
+  function levelUp(tw){
+    // бафы на уровень
+    tw.conf.range *= 1.12;
+    tw.conf.damage *= 1.18;
+    tw.conf.cooldownSec = Math.max(0.35, tw.conf.cooldownSec * 0.94);
+
+    // визуальный всплеск
+    const flash = new PIXI.Graphics();
+    flash.lineStyle(4, 0x00c853, 0.9);
+    flash.drawCircle(0,0, TILE_SIZE*0.6);
+    flash.x = tw.x; flash.y = tw.y;
+    uiLayerRef.current.addChild(flash);
+    let a = 1;
+    const app = appRef.current;
+    const fade = (d)=>{
+      const dt = typeof d === 'number' ? d : (d?.deltaTime ?? 1);
+      a -= (dt/60)*1.2; flash.alpha = Math.max(0,a);
+      if (a<=0){ uiLayerRef.current.removeChild(flash); flash.destroy(); app.ticker.remove(fade); }
+    };
+    app.ticker.add(fade);
+  }
+
   function placeTower(cx, cy, typeKey) {
     const conf = { ...TOWER_TYPES[typeKey] };
+
+    // тело башни
     const sprite = new PIXI.Graphics();
     sprite.lineStyle(2, 0x000000);
     sprite.beginFill(conf.color);
@@ -330,29 +414,60 @@ export default function App() {
     sprite.endFill();
     sprite.x = cx * TILE_SIZE + TILE_SIZE / 2;
     sprite.y = cy * TILE_SIZE + TILE_SIZE / 2;
-    sprite.eventMode = "static"; sprite.cursor = "pointer";
+
+    // апгрейд по клику (подуровень)
+    sprite.eventMode = "static";
+    sprite.cursor = "pointer";
     sprite.on("pointerdown", () => upgradeTowerByClick(sprite));
+
     towerLayerRef.current.addChild(sprite);
-    towersRef.current.push({ x: sprite.x, y: sprite.y, conf, cooldownLeft: 0, sprite });
+
+    const ui = createTowerUI(sprite.x, sprite.y, conf);
+
+    const tower = {
+      x: sprite.x,
+      y: sprite.y,
+      conf,
+      cooldownLeft: 0,
+      sprite,
+      ui,
+      level: 1,
+      sublevel: 0,
+    };
+    towersRef.current.push(tower);
+    redrawTowerProgress(tower);
+
     occupiedRef.current.add(`${cx},${cy}`);
     goldRef.current -= conf.cost;
   }
 
   function upgradeTowerByClick(sprite) {
-    const tw = towersRef.current.find(t => t.sprite === sprite); if (!tw) return;
-    const cost = tw.conf.upgradeCost ?? 50; if (goldRef.current < cost) return;
-    tw.conf.range *= 1.25; tw.conf.damage *= 1.4;
-    const baseCd = (typeof tw.conf.cooldownSec === 'number' ? tw.conf.cooldownSec : null)
-                ?? (typeof tw.conf.cooldownLeft === 'number' ? tw.conf.cooldownLeft : null)
-                ?? TOWER_TYPES.archer.cooldownSec;
-    tw.conf.cooldownSec = Math.max(0.4, baseCd * 0.9);
+    const tw = towersRef.current.find(t => t.sprite === sprite);
+    if (!tw) return;
+
+    const cost = tw.conf.upgradeCost ?? 50;
+    if (goldRef.current < cost) return;
+
     goldRef.current -= cost;
-    const flash = new PIXI.Graphics();
-    flash.beginFill(0xffffff, 0.6).drawCircle(0,0,TILE_SIZE/2).endFill();
-    flash.x = tw.x; flash.y = tw.y; uiLayerRef.current.addChild(flash);
-    let a = 0.6; const app = appRef.current;
-    const fade = (d) => { const dt = typeof d === 'number' ? d : (d?.deltaTime ?? 1); a -= (dt/60)*1.5; flash.alpha = Math.max(0,a); if (flash.alpha<=0){ uiLayerRef.current.removeChild(flash); flash.destroy(); app.ticker.remove(fade);} };
-    app.ticker.add(fade);
+
+    // добавляем подуровень, уровни = 1..10
+    const maxLevel = 10;
+    const need = SUBLEVELS_PER_LEVEL[Math.min(tw.level-1, SUBLEVELS_PER_LEVEL.length-1)];
+    tw.sublevel += 1;
+
+    // короткая вспышка на каждый подуровень
+    const ping = new PIXI.Graphics();
+    ping.beginFill(0xffffff, 0.5).drawCircle(0,0,TILE_SIZE/3).endFill();
+    ping.x = tw.x; ping.y = tw.y; uiLayerRef.current.addChild(ping);
+    let a=0.5; const app = appRef.current; const fade=(d)=>{ const dt=typeof d==='number'?d:(d?.deltaTime??1); a-=(dt/60)*2; ping.alpha=Math.max(0,a); if(a<=0){ uiLayerRef.current.removeChild(ping); ping.destroy(); app.ticker.remove(fade);} }; app.ticker.add(fade);
+
+    if (tw.sublevel >= need && tw.level < maxLevel){
+      tw.level += 1;
+      tw.sublevel = 0;
+      levelUp(tw);
+    }
+
+    redrawTowerProgress(tw);
   }
 
   function startWave() {
@@ -364,23 +479,10 @@ export default function App() {
     waveRef.current += 1;
   }
 
-  function getEnemyTypeForWave(idx) {
-    if (idx < 2) return 'grunt';
-    const r = Math.random();
-    if (r < 0.55) return 'grunt';
-    if (r < 0.85) return 'runner';
-    return 'tank';
-  }
-
-  function heartsText(hp) {
-    if (hp <= 5) return '❤'.repeat(Math.max(1, hp));
-    return `❤×${hp}`;
-  }
-
   function spawnEnemy() {
     const idx = Math.max(0, waveRef.current - 1);
     const base = getWaveConf(idx);
-    const typeKey = getEnemyTypeForWave(idx);
+    const typeKey = pickEnemyType(idx);
     const et = ENEMY_TYPES[typeKey] ?? ENEMY_TYPES.grunt;
 
     const hpMax = Math.max(1, Math.round(base.hp * et.hpMul));
