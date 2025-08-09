@@ -4,7 +4,7 @@ import * as PIXI from "pixi.js";
 const TILE_SIZE = 64;
 const GRID_SIZE = 10; // размер поля
 
-// Генератор случайного пути с сохранением логики (старт на одном краю, финиш внизу слева)
+// === СЛУЧАЙНЫЙ ПУТЬ: старт сверху слева, финиш (база) внизу слева, коридор с отступом ===
 function mulberry32(a) {
   return function() {
     let t = a += 0x6D2B79F5;
@@ -22,7 +22,7 @@ function buildRandomPath(seed = Date.now()) {
   const used = new Set();
   const push = (x, y) => { const k = `${x},${y}`; if (!used.has(k)) { used.add(k); path.push([x, y]); } };
 
-  // старт сверху слева
+  // старт сверху слева (внутри отступа)
   let x = margin, y = margin;
   push(x, y);
   let goRight = true;
@@ -31,44 +31,46 @@ function buildRandomPath(seed = Date.now()) {
     const xStart = goRight ? margin : N - 1 - margin;
     const xEnd = goRight ? N - 1 - margin : margin;
     const xStep = goRight ? 1 : -1;
-    for (let xx = xStart; goRight ? xx <= xEnd : xx >= xEnd; xx += xStep) {
-      push(xx, y);
-    }
+    for (let xx = xStart; goRight ? xx <= xEnd : xx >= xEnd; xx += xStep) push(xx, y);
     if (y < N - 1 - margin) {
-      const drop = rnd() < 0.5 ? 1 : 2;
-      for (let k = 1; k <= drop && y + k <= N - 1 - margin; k++) {
-        push(xEnd, y + k);
-      }
+      const drop = (rnd() < 0.5 ? 1 : 2);
+      for (let k = 1; k <= drop && y + k <= N - 1 - margin; k++) push(xEnd, y + k);
       y += drop;
     }
     goRight = !goRight;
   }
 
-  // спуск к базе (x=margin, y=N-1-margin)
+  // финиш у базы (левый нижний угол внутри отступа)
   const baseX = margin;
   const baseY = N - 1 - margin;
   const [cx, cy] = path[path.length - 1];
-  if (cy < baseY) {
-    for (let yy = cy + 1; yy <= baseY; yy++) push(cx, yy);
-  }
+  if (cy < baseY) for (let yy = cy + 1; yy <= baseY; yy++) push(cx, yy);
   if (cx !== baseX) {
     const step = baseX > cx ? 1 : -1;
     for (let xx = cx; xx !== baseX; xx += step) push(xx + step, baseY);
   }
-
   return path;
 }
 
 const enemyPath = buildRandomPath();
 const pathSet = new Set(enemyPath.map(([x, y]) => `${x},${y}`));
+const START = enemyPath[0];
+const BASE  = enemyPath[enemyPath.length - 1];
 
-// Генерация параметров волны по её индексу
+// Генерация параметров волны по её индексу (бесконечные волны)
 function getWaveConf(idx) {
   const enemies = 6 + Math.floor(idx * 1.5);
-  const speed = 0.80 + Math.min(0.9, idx * 0.03);
-  const hp = 1 + Math.floor(idx / 2);
+  const speed   = 0.80 + Math.min(0.9, idx * 0.03);
+  const hp      = 1 + Math.floor(idx / 2);
   return { enemies, speed, hp };
 }
+
+// Типы башен
+const TOWER_TYPES = {
+  archer: { name: "Лучник", cost: 50,  range: TILE_SIZE * 2.2, cooldownSec: 0.75, bulletSpeed: 220, color: 0x1e90ff, damage: 1,   upgradeCost: 40 },
+  cannon: { name: "Пушка",  cost: 80,  range: TILE_SIZE * 2.6, cooldownSec: 1.20, bulletSpeed: 180, color: 0xffa500, damage: 2,   upgradeCost: 60 },
+  mage:   { name: "Маг",    cost: 100, range: TILE_SIZE * 3.0, cooldownSec: 0.90, bulletSpeed: 240, color: 0x7a00ff, damage: 1.5, upgradeCost: 70 },
+};
 
 export default function App() {
   // DOM
@@ -96,14 +98,7 @@ export default function App() {
   const occupiedRef = useRef(new Set()); // "x,y"
   const spawnRef = useRef({ toSpawn: 0, timerSec: 0 });
 
-  // Типы башен (секундные тайминги; bulletSpeed — px/сек)
-  const TOWER_TYPES = {
-    archer: { name: "Лучник", cost: 50,  range: TILE_SIZE * 2.2, cooldownSec: 0.75, bulletSpeed: 220, color: 0x1e90ff, damage: 1,   upgradeCost: 40 },
-    cannon: { name: "Пушка",  cost: 80,  range: TILE_SIZE * 2.6, cooldownSec: 1.20, bulletSpeed: 180, color: 0xffa500, damage: 2,   upgradeCost: 60 },
-    mage:   { name: "Маг",    cost: 100, range: TILE_SIZE * 3.0, cooldownSec: 0.90, bulletSpeed: 240, color: 0x7a00ff, damage: 1.5, upgradeCost: 70 },
-  };
-
-  // UI-стейты (синкаем редко)
+  // UI-стейты
   const [gold, setGold]       = useState(goldRef.current);
   const [lives, setLives]     = useState(livesRef.current);
   const [wave, setWave]       = useState(waveRef.current);
@@ -113,7 +108,7 @@ export default function App() {
   // Радиус превью при выборе башни
   const radiusPreviewRef = useRef(null);
 
-  // Инициализация PIXI один раз
+  // Инициализация PIXI
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
     tg?.ready?.();
@@ -130,15 +125,13 @@ export default function App() {
     appRef.current = app;
     mountRef.current?.appendChild(app.view);
 
-    // Responsive-fit (масштаб под экран)
+    // Responsive-fit
     function fit() {
       const baseW = TILE_SIZE * GRID_SIZE;
       const baseH = TILE_SIZE * GRID_SIZE;
-
       const maxW = Math.min(window.innerWidth,  tg?.viewportWidth  ?? Infinity);
       const maxH = Math.min(window.innerHeight, tg?.viewportHeight ?? Infinity);
-
-      const scale = Math.min(maxW / baseW, maxH / baseH, 1); // не upscale-им
+      const scale = Math.min(maxW / baseW, maxH / baseH, 1);
       app.renderer.resize(Math.ceil(baseW * scale), Math.ceil(baseH * scale));
       app.stage.scale.set(scale);
     }
@@ -159,13 +152,17 @@ export default function App() {
     uiLayerRef.current     = uiLayer;
     app.stage.addChild(gridLayer, towerLayer, enemyLayer, bulletLayer, uiLayer);
 
-    // Сетка с обработчиками
+    // Сетка и клики
     for (let y = 0; y < GRID_SIZE; y++) {
       for (let x = 0; x < GRID_SIZE; x++) {
-        const isPath = pathSet.has(`${x},${y}`);
+        const isPath  = pathSet.has(`${x},${y}`);
+        const isStart = (x === START[0] && y === START[1]);
+        const isBase  = (x === BASE[0]  && y === BASE[1]);
+
         const cell = new PIXI.Graphics();
         cell.lineStyle(1, isPath ? 0x88aaff : 0x999999);
-        cell.beginFill(isPath ? 0xeef2ff : 0xffffff);
+        const fill = isStart ? 0xdfffe0 : isBase ? 0xffe0e0 : (isPath ? 0xeef2ff : 0xffffff);
+        cell.beginFill(fill);
         cell.drawRect(0, 0, TILE_SIZE, TILE_SIZE);
         cell.endFill();
         cell.x = x * TILE_SIZE;
@@ -182,7 +179,7 @@ export default function App() {
         cell.on("pointerdown", () => {
           const typeKey = selectedTypeRef.current;
           if (!typeKey) return;
-          if (isPath) return;
+          if (isPath) return; // нельзя строить на пути
           const k = `${x},${y}`;
           if (occupiedRef.current.has(k)) return;
           const conf = TOWER_TYPES[typeKey];
@@ -194,14 +191,21 @@ export default function App() {
       }
     }
 
-    // Тикер (кросс-версионный deltaTime)
+    // Иконка базы (🏰) поверх клетки базы
+    const baseIcon = new PIXI.Text('🏰', { fontSize: Math.floor(TILE_SIZE * 0.8) });
+    baseIcon.anchor.set(0.5);
+    baseIcon.x = BASE[0] * TILE_SIZE + TILE_SIZE / 2;
+    baseIcon.y = BASE[1] * TILE_SIZE + TILE_SIZE / 2;
+    uiLayer.addChild(baseIcon);
+
+    // Тикер
     app.ticker.add(tick);
 
     return () => {
       window.removeEventListener("resize", fit);
       tg?.offEvent?.("viewportChanged", fit);
       app.ticker.remove(tick);
-      app.destroy(true, true); // одного достаточно
+      app.destroy(true, true);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -217,11 +221,9 @@ export default function App() {
     return () => clearInterval(id);
   }, []);
 
-  // ---------- Игровые функции ----------
-
+  // --- Игровые функции ---
   function placeTower(cx, cy, typeKey) {
     const conf = { ...TOWER_TYPES[typeKey] };
-
     const sprite = new PIXI.Graphics();
     sprite.lineStyle(2, 0x000000);
     sprite.beginFill(conf.color);
@@ -230,20 +232,12 @@ export default function App() {
     sprite.x = cx * TILE_SIZE + TILE_SIZE / 2;
     sprite.y = cy * TILE_SIZE + TILE_SIZE / 2;
 
-    // апгрейд по клику
     sprite.eventMode = "static";
     sprite.cursor = "pointer";
     sprite.on("pointerdown", () => upgradeTowerByClick(sprite));
 
     towerLayerRef.current.addChild(sprite);
-
-    towersRef.current.push({
-      x: sprite.x,
-      y: sprite.y,
-      conf,
-      cooldownLeft: 0, // сек
-      sprite
-    });
+    towersRef.current.push({ x: sprite.x, y: sprite.y, conf, cooldownLeft: 0, sprite });
     occupiedRef.current.add(`${cx},${cy}`);
     goldRef.current -= conf.cost;
   }
@@ -254,20 +248,14 @@ export default function App() {
     const cost = tw.conf.upgradeCost ?? 50;
     if (goldRef.current < cost) return;
 
-    // простая схема апгрейда
     tw.conf.range *= 1.25;
     tw.conf.damage *= 1.4;
-
-    // корректный пересчёт КД (сек) без ловушки с ||
-    const baseCd =
-      (typeof tw.conf.cooldownSec === "number" ? tw.conf.cooldownSec : null) ??
-      (typeof tw.conf.cooldownLeft === "number" ? tw.conf.cooldownLeft : null) ??
-      TOWER_TYPES.archer.cooldownSec;
-
+    const baseCd = (typeof tw.conf.cooldownSec === "number" ? tw.conf.cooldownSec : null) ??
+                   (typeof tw.conf.cooldownLeft === "number" ? tw.conf.cooldownLeft : null) ??
+                   TOWER_TYPES.archer.cooldownSec;
     tw.conf.cooldownSec = Math.max(0.4, baseCd * 0.9);
     goldRef.current -= cost;
 
-    // вспышка
     const flash = new PIXI.Graphics();
     flash.beginFill(0xffffff, 0.6).drawCircle(0, 0, TILE_SIZE / 2).endFill();
     flash.x = tw.x; flash.y = tw.y;
@@ -278,43 +266,30 @@ export default function App() {
       const dt = typeof deltaOrTicker === "number" ? deltaOrTicker : (deltaOrTicker?.deltaTime ?? 1);
       a -= (dt / 60) * 1.5;
       flash.alpha = Math.max(0, a);
-      if (flash.alpha <= 0) {
-        uiLayerRef.current.removeChild(flash);
-        flash.destroy();
-        app.ticker.remove(fade);
-      }
+      if (flash.alpha <= 0) { uiLayerRef.current.removeChild(flash); flash.destroy(); app.ticker.remove(fade); }
     };
     app.ticker.add(fade);
   }
 
   function startWave() {
     if (isWaveActiveRef.current) return;
-
     const idx = waveRef.current;       // 0..∞ — индекс следующей волны
     const conf = getWaveConf(idx);
-
     spawnRef.current.toSpawn  = conf.enemies;
-    spawnRef.current.timerSec = 0.5;   // стартовая задержка
+    spawnRef.current.timerSec = 0.5;
     isWaveActiveRef.current = true;
-    waveRef.current += 1;              // теперь счётчик волн в UI идёт 1..∞
+    waveRef.current += 1;              // UI покажет 1..∞
   }
 
   function spawnEnemy() {
-    const idx = Math.max(0, waveRef.current - 1); // индекс активной волны
+    const idx = Math.max(0, waveRef.current - 1);
     const conf = getWaveConf(idx);
-
     const sprite = new PIXI.Graphics();
     sprite.beginFill(0xff3b30);
     sprite.drawCircle(0, 0, TILE_SIZE / 4);
     sprite.endFill();
     enemyLayerRef.current.addChild(sprite);
-
-    enemiesRef.current.push({
-      sprite,
-      pathIndex: 0,           // положение по пути (клетки)
-      speed: conf.speed,      // клетки/сек
-      hp: conf.hp
-    });
+    enemiesRef.current.push({ sprite, pathIndex: 0, speed: conf.speed, hp: conf.hp });
   }
 
   function fireBullet(tower, target) {
@@ -322,23 +297,14 @@ export default function App() {
     sprite.beginFill(0xffd60a);
     sprite.drawCircle(0, 0, 5);
     sprite.endFill();
-    sprite.x = tower.x;
-    sprite.y = tower.y;
+    sprite.x = tower.x; sprite.y = tower.y;
     bulletLayerRef.current.addChild(sprite);
 
     const dx = target.sprite.x - tower.x;
     const dy = target.sprite.y - tower.y;
     const d = Math.hypot(dx, dy) || 1;
-    const speed = tower.conf.bulletSpeed; // px/сек
-
-    bulletsRef.current.push({
-      sprite,
-      vx: (dx / d) * speed,
-      vy: (dy / d) * speed,
-      speed,
-      target,
-      damage: tower.conf.damage
-    });
+    const speed = tower.conf.bulletSpeed;
+    bulletsRef.current.push({ sprite, vx: (dx / d) * speed, vy: (dy / d) * speed, speed, target, damage: tower.conf.damage });
   }
 
   function showOverlay(text) {
@@ -346,74 +312,41 @@ export default function App() {
     const app = appRef.current;
     const overlay = new PIXI.Container();
     overlay.name = "overlay";
-
     const bg = new PIXI.Graphics();
     bg.beginFill(0x000000, 0.6).drawRect(0, 0, app.view.width, app.view.height).endFill();
-
     const label = new PIXI.Text(text, { fill: 0xffffff, fontSize: 28 });
-    label.anchor.set(0.5);
-    label.x = app.view.width / 2;
-    label.y = app.view.height / 2;
-
+    label.anchor.set(0.5); label.x = app.view.width / 2; label.y = app.view.height / 2;
     overlay.addChild(bg, label);
     uiLayerRef.current.addChild(overlay);
   }
-
   function hideOverlay() {
     const layer = uiLayerRef.current;
     const old = layer?.getChildByName?.("overlay");
-    if (old) {
-      layer.removeChild(old);
-      old.destroy({ children: true });
-    }
+    if (old) { layer.removeChild(old); old.destroy({ children: true }); }
   }
 
   function showRadiusPreview(cx, cy) {
-    const typeKey = selectedTypeRef.current;
-    if (!typeKey) return;
-    hideRadiusPreview();
-
+    const typeKey = selectedTypeRef.current; if (!typeKey) return; hideRadiusPreview();
     const conf = TOWER_TYPES[typeKey];
     const g = new PIXI.Graphics();
-    g.lineStyle(2, 0x00cc66, 0.35);
-    g.beginFill(0x00cc66, 0.08);
-    g.drawCircle(
-      cx * TILE_SIZE + TILE_SIZE / 2,
-      cy * TILE_SIZE + TILE_SIZE / 2,
-      conf.range
-    );
-    g.endFill();
-    g.name = "radiusPreview";
-    uiLayerRef.current.addChild(g);
-    radiusPreviewRef.current = g;
+    g.lineStyle(2, 0x00cc66, 0.35); g.beginFill(0x00cc66, 0.08);
+    g.drawCircle(cx * TILE_SIZE + TILE_SIZE / 2, cy * TILE_SIZE + TILE_SIZE / 2, conf.range);
+    g.endFill(); g.name = "radiusPreview"; uiLayerRef.current.addChild(g); radiusPreviewRef.current = g;
   }
-
   function hideRadiusPreview() {
-    const g = radiusPreviewRef.current;
-    if (g?.parent) {
-      g.parent.removeChild(g);
-      g.destroy();
-    }
-    radiusPreviewRef.current = null;
+    const g = radiusPreviewRef.current; if (g?.parent) { g.parent.removeChild(g); g.destroy(); } radiusPreviewRef.current = null;
   }
 
-  // Главный тик (кросс-версионный deltaTime)
+  // Главный тик
   function tick(deltaOrTicker) {
-    const app = appRef.current;
-    if (!app) return;
-
-    const dt = typeof deltaOrTicker === "number"
-      ? deltaOrTicker
-      : (deltaOrTicker?.deltaTime ?? 1);
+    const app = appRef.current; if (!app) return;
+    const dt = typeof deltaOrTicker === "number" ? deltaOrTicker : (deltaOrTicker?.deltaTime ?? 1);
     const dtSec = dt / 60;
 
-    // Перерыв: тикает и автостарт по окончании
+    // Перерыв: тикает и автостарт
     if (!isWaveActiveRef.current && breakRef.current > 0) {
       breakRef.current = Math.max(0, breakRef.current - dtSec);
-      if (breakRef.current <= 0) {
-        breakRef.current = 0;
-        startWave(); // автостарт следующей волны
-      }
+      if (breakRef.current <= 0) { breakRef.current = 0; startWave(); }
     }
 
     // Спавн волны
@@ -423,22 +356,20 @@ export default function App() {
         if (spawnRef.current.timerSec <= 0) {
           spawnEnemy();
           spawnRef.current.toSpawn -= 1;
-          spawnRef.current.timerSec = 0.75; // интервал спавна (сек)
+          spawnRef.current.timerSec = 0.75;
         }
       }
-
-      // Конец волны? — запускаем перерыв, без ограничений по количеству волн
+      // Конец волны → перерыв
       if (spawnRef.current.toSpawn === 0 && enemiesRef.current.length === 0) {
         isWaveActiveRef.current = false;
-        breakRef.current = 8; // длина перерыва между волнами
+        breakRef.current = 8;
       }
     }
 
-    // Движение врагов (плавная интерполяция)
+    // Движение врагов
     for (let i = enemiesRef.current.length - 1; i >= 0; i--) {
       const en = enemiesRef.current[i];
       if (!en.sprite?.parent) { enemiesRef.current.splice(i, 1); continue; }
-
       const iCell = Math.floor(en.pathIndex);
       if (iCell < enemyPath.length - 1) {
         const t = en.pathIndex - iCell;
@@ -446,74 +377,43 @@ export default function App() {
         const [bx, by] = enemyPath[iCell + 1];
         en.sprite.x = (ax + (bx - ax) * t) * TILE_SIZE + TILE_SIZE / 2;
         en.sprite.y = (ay + (by - ay) * t) * TILE_SIZE + TILE_SIZE / 2;
-        en.pathIndex += en.speed * dtSec; // клетки/сек * сек
+        en.pathIndex += en.speed * dtSec;
       } else {
-        // дошёл
         enemyLayerRef.current.removeChild(en.sprite);
         en.sprite.destroy();
         enemiesRef.current.splice(i, 1);
         livesRef.current -= 1;
-        if (livesRef.current <= 0) {
-          showOverlay("💀 Game Over");
-          app.ticker.stop();
-        }
+        if (livesRef.current <= 0) { showOverlay("💀 Game Over"); app.ticker.stop(); }
       }
     }
 
     // Стрельба башен
     towersRef.current.forEach(t => {
       if (t.cooldownLeft > 0) { t.cooldownLeft = Math.max(0, t.cooldownLeft - dtSec); return; }
-
-      // цель — ближайший в радиусе
       let target = null, best = Infinity;
       enemiesRef.current.forEach(en => {
         if (!en.sprite?.parent) return;
-        const dx = en.sprite.x - t.x;
-        const dy = en.sprite.y - t.y;
-        const d = Math.hypot(dx, dy);
+        const dx = en.sprite.x - t.x; const dy = en.sprite.y - t.y; const d = Math.hypot(dx, dy);
         if (d <= t.conf.range && d < best) { best = d; target = en; }
       });
-
-      if (target) {
-        fireBullet(t, target);
-        t.cooldownLeft = t.conf.cooldownSec;
-      }
+      if (target) { fireBullet(t, target); t.cooldownLeft = t.conf.cooldownSec; }
     });
 
-    // Полёт пуль (homing-lite)
+    // Полёт пуль
     for (let i = bulletsRef.current.length - 1; i >= 0; i--) {
       const b = bulletsRef.current[i];
       if (!b.target || !enemiesRef.current.includes(b.target) || !b.target.sprite?.parent) {
-        bulletLayerRef.current.removeChild(b.sprite);
-        b.sprite.destroy();
-        bulletsRef.current.splice(i, 1);
-        continue;
+        bulletLayerRef.current.removeChild(b.sprite); b.sprite.destroy(); bulletsRef.current.splice(i, 1); continue;
       }
-
-      // перенаводим вектор, сохраняя модуль скорости (px/сек)
-      const dx = b.target.sprite.x - b.sprite.x;
-      const dy = b.target.sprite.y - b.sprite.y;
-      const d  = Math.hypot(dx, dy) || 1;
-      const speed = b.speed;
-      b.vx = (dx / d) * speed;
-      b.vy = (dy / d) * speed;
-
-      // перемещаем
-      b.sprite.x += b.vx * dtSec;
-      b.sprite.y += b.vy * dtSec;
-
-      // попадание
+      const dx = b.target.sprite.x - b.sprite.x; const dy = b.target.sprite.y - b.sprite.y; const d = Math.hypot(dx, dy) || 1;
+      const speed = b.speed; b.vx = (dx / d) * speed; b.vy = (dy / d) * speed;
+      b.sprite.x += b.vx * dtSec; b.sprite.y += b.vy * dtSec;
       if (Math.hypot(dx, dy) < 10) {
-        bulletLayerRef.current.removeChild(b.sprite);
-        b.sprite.destroy();
-        bulletsRef.current.splice(i, 1);
-
+        bulletLayerRef.current.removeChild(b.sprite); b.sprite.destroy(); bulletsRef.current.splice(i, 1);
         b.target.hp -= b.damage;
         if (b.target.hp <= 0) {
-          enemyLayerRef.current.removeChild(b.target.sprite);
-          b.target.sprite.destroy();
-          const idx = enemiesRef.current.indexOf(b.target);
-          if (idx !== -1) enemiesRef.current.splice(idx, 1);
+          enemyLayerRef.current.removeChild(b.target.sprite); b.target.sprite.destroy();
+          const idx = enemiesRef.current.indexOf(b.target); if (idx !== -1) enemiesRef.current.splice(idx, 1);
           goldRef.current += 10;
         }
       }
@@ -521,29 +421,18 @@ export default function App() {
   }
 
   // UI-помощники
-  function selectTower(typeKey) {
-    selectedTypeRef.current = typeKey;
-    setSelectedType(typeKey);
-  }
+  function selectTower(typeKey) { selectedTypeRef.current = typeKey; setSelectedType(typeKey); }
 
   const tg = window.Telegram?.WebApp;
   const isDark = tg?.colorScheme === "dark";
   const panelStyle = {
-    display: "flex",
-    gap: 16,
-    alignItems: "center",
-    padding: "8px 12px",
-    borderRadius: 8,
-    background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
-    color: isDark ? "#fff" : "#111",
-    boxShadow: isDark ? "0 2px 10px rgba(0,0,0,0.3)" : "0 2px 10px rgba(0,0,0,0.1)",
-    fontSize: "18px",
-    position: "sticky",
-    top: 0,
-    zIndex: 10
+    display: "flex", gap: 16, alignItems: "center", padding: "8px 12px", borderRadius: 8,
+    background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)", color: isDark ? "#fff" : "#111",
+    boxShadow: isDark ? "0 2px 10px rgba(0,0,0,0.3)" : "0 2px 10px rgba(0,0,0,0.1)", fontSize: "18px",
+    position: "sticky", top: 0, zIndex: 10
   };
 
-  const startDisabled = isWaveActiveRef.current; // без проверки длины массива волн
+  const startDisabled = isWaveActiveRef.current; // бесконечные волны
 
   return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}>
@@ -567,14 +456,7 @@ export default function App() {
               key={key}
               disabled={disabled}
               onClick={() => selectTower(key)}
-              style={{
-                padding:"6px 10px",
-                background: selectedType === key ? "#d0ebff" : "#fff",
-                border:"1px solid #ccc",
-                borderRadius:6,
-                cursor: disabled ? "not-allowed" : "pointer",
-                opacity: disabled ? 0.6 : 1
-              }}
+              style={{ padding:"6px 10px", background: selectedType === key ? "#d0ebff" : "#fff", border:"1px solid #ccc", borderRadius:6, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1 }}
             >
               {t.name} ({t.cost})
             </button>
@@ -587,12 +469,7 @@ export default function App() {
       <button
         onClick={() => { hideOverlay(); breakRef.current = 0; startWave(); }}
         disabled={startDisabled}
-        style={{
-          marginTop:10, padding:"6px 14px", fontSize:16,
-          background: startDisabled ? "#9aa" : "#28a745",
-          color:"#fff", border:"none", borderRadius:6,
-          cursor: startDisabled ? "not-allowed" : "pointer"
-        }}
+        style={{ marginTop:10, padding:"6px 14px", fontSize:16, background: startDisabled ? "#9aa" : "#28a745", color:"#fff", border:"none", borderRadius:6, cursor: startDisabled ? "not-allowed" : "pointer" }}
       >
         🚀 Начать волну
       </button>
