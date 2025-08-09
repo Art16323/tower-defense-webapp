@@ -244,6 +244,8 @@ export default function App() {
   const [breakTime, setBreak] = useState(Math.ceil(breakRef.current));
   const [selectedType, setSelectedType] = useState(null);
   const [selectedTower, setSelectedTower] = useState(null);
+  // отдельный «тик» для безопасного форс-рендера без клонирования объектов
+  const [uiTick, setUiTick] = useState(0);
 
   const radiusPreviewRef = useRef(null);
   const selectedRadiusRef = useRef(null);
@@ -425,7 +427,8 @@ export default function App() {
       setLives(livesRef.current);
       setWave(waveRef.current);
       setBreak(Math.max(0, Math.ceil(breakRef.current)));
-      setSelectedTower(t => (t ? {...t} : t)); // обновляем панель выбора
+      // форсим общий ререндер, не трогая ссылку на выбранную башню
+      setUiTick(t => t + 1);
     }, 100);
     return () => clearInterval(id);
   }, []);
@@ -534,8 +537,12 @@ export default function App() {
     const ui = createTowerUI(cont.x, cont.y, conf);
 
     const tower = {
+      // пиксельные координаты центра
       x: cont.x,
       y: cont.y,
+      // добавляем координаты клетки (для освобождения при продаже)
+      cx,
+      cy,
       conf,
       cooldownLeft: 0,
       sprite: cont,
@@ -562,6 +569,7 @@ export default function App() {
     if (!tw) return;
     // снять радиус с прошлого выбора
     hideSelectedRadius();
+    // держим ссылку на оригинальный объект башни (без клонирования)
     setSelectedTower(tw);
     showSelectedRadius(tw);
   }
@@ -578,9 +586,10 @@ export default function App() {
     let a=0.5; const app = appRef.current; const fade=(d)=>{ const dt=typeof d==='number'?d:(d?.deltaTime??1); a-=(dt/60)*2; ping.alpha=Math.max(0,a); if(a<=0){ uiLayerRef.current.removeChild(ping); ping.destroy(); app.ticker.remove(fade);} }; app.ticker.add(fade);
     if (tw.sublevel >= need && tw.level < maxLevel){ tw.level += 1; tw.sublevel = 0; levelUp(tw); }
     redrawTowerProgress(tw);
-    // если эта башня выбрана — обновим круг радиуса
-    if (selectedTower === tw) showSelectedRadius(tw);
-    setSelectedTower({...tw});
+    // всегда обновляем круг радиуса
+    showSelectedRadius(tw);
+    // форсим ререндер панели без изменения ссылки
+    setUiTick(t => t + 1);
   }
 
   function sellTower(tw){
@@ -588,6 +597,17 @@ export default function App() {
     const base = tw.conf.cost||0; const extra = Math.max(0, (tw.invested||base) - base);
     const refund = Math.round(base*0.5 + extra*0.25);
     goldRef.current += refund;
+
+    // освободить клетку
+    if (typeof tw.cx === 'number' && typeof tw.cy === 'number') {
+      occupiedRef.current.delete(`${tw.cx},${tw.cy}`);
+    } else {
+      // fallback на всякий случай
+      const gx = Math.round((tw.x - TILE_SIZE/2)/TILE_SIZE);
+      const gy = Math.round((tw.y - TILE_SIZE/2)/TILE_SIZE);
+      occupiedRef.current.delete(`${gx},${gy}`);
+    }
+
     // remove sprites
     if (tw.ui?.uiCont) { uiLayerRef.current.removeChild(tw.ui.uiCont); tw.ui.uiCont.destroy({children:true}); }
     if (tw.sprite?.parent) { towerLayerRef.current.removeChild(tw.sprite); tw.sprite.destroy(); }
