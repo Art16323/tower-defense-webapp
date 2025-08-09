@@ -13,81 +13,86 @@ function mulberry32(a) {
   }
 }
 
-// Генерация пути с ограничением на максимум 2 вертикальные клетки подряд
+// Генерация пути с ограничениями, чтобы сохранялись позиции для башен
 function buildRandomPath(seed = Date.now(), options = {}) {
   const rnd = mulberry32(seed);
   const N = GRID_SIZE;
   const margin = 1; // отступ для башен
-  const maxVertStreak = options.maxVertStreak ?? 2; // НЕ больше 2 вертикальных подряд
+  const maxVertStreak  = options.maxVertStreak  ?? 2; // НЕ больше 2 вертикальных подряд
+  const maxHorizStreak = options.maxHorizStreak ?? 4; // ограничим длинные горизонтали
 
   const path = [];
   const used = new Set();
   const push = (x, y) => { const k = `${x},${y}`; if (!used.has(k)) { used.add(k); path.push([x, y]); } };
 
   // старт сверху слева (внутри отступа)
-  let x = margin, y = margin;
-  push(x, y);
+  let y = margin;
   let goRight = true;
   let vertStreak = 0;
 
   while (y < N - 1 - margin) {
-    // Горизонтальная полоса — сбрасываем вертикальную серию
-    vertStreak = 0;
+    // Горизонтальная полоса с ограничением серии
     const xStart = goRight ? margin : N - 1 - margin;
-    const xEnd = goRight ? N - 1 - margin : margin;
-    const xStep = goRight ? 1 : -1;
-    for (let xx = xStart; goRight ? xx <= xEnd : xx >= xEnd; xx += xStep) {
-      push(xx, y);
+    const xEnd   = goRight ? N - 1 - margin : margin;
+    const xStep  = goRight ? 1 : -1;
+
+    let x = xStart;
+    let horizStreak = 0;
+    while (goRight ? x <= xEnd : x >= xEnd) {
+      push(x, y);
+      horizStreak++;
+      // если горизонтальная серия стала слишком длинной — делаем мини-спуск на 1 клетку
+      if (horizStreak >= maxHorizStreak && y < N - 1 - margin) {
+        push(x, y + 1); // шаг вниз
+        y += 1;         // фиксируем новый уровень полосы
+        vertStreak = Math.min(vertStreak + 1, maxVertStreak);
+        horizStreak = 0; // сбрасываем, продолжим на новой высоте
+        if (vertStreak >= maxVertStreak) {
+          // принудительно сделаем боковой шаг на 1, чтобы не было >2 вертикалей подряд
+          const side = goRight ? -1 : 1; // смещение к центру
+          const sx = x + side;
+          if (sx >= margin && sx <= N - 1 - margin) push(sx, y);
+          vertStreak = 0;
+        }
+      }
+      x += xStep;
     }
 
-    // Вертикальный спуск (1–2 клетки), но не допускаем более 2 подряд
+    // Небольшой спуск между полосами 1–2 клетки, но следим за лимитом вертикали
     if (y < N - 1 - margin) {
       const drop = (rnd() < 0.5 ? 1 : 2);
-      const edgeX = xEnd; // стоим на краю полосы
+      const edgeX = goRight ? xEnd - xStep : xEnd - xStep; // последний валидный x
       for (let k = 1; k <= drop && y + k <= N - 1 - margin; k++) {
-        // шаг вниз
         push(edgeX, y + k);
         vertStreak++;
-        // если превысили лимит — делаем боковой «зиг» на 1 клетку и сбрасываем серию
         if (vertStreak >= maxVertStreak && (y + k) < (N - 1 - margin)) {
-          const side = (edgeX === margin) ? 1 : -1; // шаг от края к центру
+          const side = (edgeX === margin) ? 1 : -1;
           const sx = edgeX + side;
           const sy = y + k;
-          if (sx >= margin && sx <= N - 1 - margin) {
-            push(sx, sy);
-            vertStreak = 0;
-          }
+          if (sx >= margin && sx <= N - 1 - margin) push(sx, sy);
+          vertStreak = 0;
         }
       }
       y += drop;
     }
+
     goRight = !goRight;
   }
 
-  // Спуск к базе (x=margin, y=N-1-margin) с "лесенкой": не более 2 вертикальных подряд
+  // Спуск к базе (x=margin, y=N-1-margin) с "лесенкой"
   const baseX = margin;
   const baseY = N - 1 - margin;
-  let cx = path[path.length - 1][0];
-  let cy = path[path.length - 1][1];
+  let [cx, cy] = path[path.length - 1];
   vertStreak = 0;
   while (cy < baseY) {
-    // шаг вниз
     cy += 1; push(cx, cy); vertStreak++;
     if (vertStreak >= maxVertStreak && cy < baseY) {
-      // боковой шаг в сторону базы по X (на 1 клетку)
       const dirX = baseX > cx ? 1 : (baseX < cx ? -1 : 0);
-      if (dirX !== 0) {
-        const nx = cx + dirX;
-        if (nx >= margin && nx <= N - 1 - margin) { cx = nx; push(cx, cy); }
-      }
+      if (dirX !== 0) { cx += dirX; push(cx, cy); }
       vertStreak = 0;
     }
   }
-  // добежать по X до базы
-  while (cx !== baseX) {
-    const dirX = baseX > cx ? 1 : -1;
-    cx += dirX; push(cx, baseY);
-  }
+  while (cx !== baseX) { const dirX = baseX > cx ? 1 : -1; cx += dirX; push(cx, baseY); }
 
   return path;
 }
@@ -96,6 +101,7 @@ const enemyPath = buildRandomPath();
 const pathSet = new Set(enemyPath.map(([x, y]) => `${x},${y}`));
 const START = enemyPath[0];
 const BASE = enemyPath[enemyPath.length - 1];
+
 
 // Генерация параметров волны по её индексу (бесконечные волны)
 function getWaveConf(idx) {
